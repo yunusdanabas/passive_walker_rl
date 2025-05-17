@@ -12,16 +12,19 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.9,<3.11"
 
-[project.dependencies]
-jax = "*"
-equinox = "*"
-optax = "*"
-brax = "*"
-gym = "*"
-numpy = "*"
-scipy = "*"
-tqdm = "*"
-matplotlib = "*"
+[project]
+name = "passive_walker_rl"
+version = "0.1.0"
+# … other fields …
 
-[project.urls]
-"Repository" = "https://github.com/YOUR_USERNAME/passive_walker_rl"
+dependencies = [
+  "jax",
+  "equinox",
+  "optax",
+  "brax",
+  "gym",
+  "numpy",
+  "scipy",
+  "tqdm",
+  "matplotlib",
+]
