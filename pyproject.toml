@@ -6,17 +6,11 @@ build-backend = "setuptools.build_meta"
 name = "passive_walker_rl"
 version = "0.1.0"
 description = "A JAX-native passive walker PPO pipeline (MuJoCo + Brax)."
+readme = "README.md"
+requires-python = ">=3.9,<3.11"
 authors = [
   { name="Yunus Emre Danabaş", email="yunusdanabas@su.edu.tr" }
 ]
-readme = "README.md"
-requires-python = ">=3.9,<3.11"
-
-[project]
-name = "passive_walker_rl"
-version = "0.1.0"
-# … other fields …
-
 dependencies = [
   "jax",
   "equinox",
@@ -28,3 +22,6 @@ dependencies = [
   "tqdm",
   "matplotlib",
 ]
+
+[project.urls]
+"Repository" = "https://github.com/YOUR_USERNAME/passive_walker_rl"
