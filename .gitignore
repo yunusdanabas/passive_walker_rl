@@ -1,0 +1,16 @@
+# Byte-compiled / cache
+__pycache__/
+*.pyc
+
+# Data & results
+data/**
+results/**
+
+# Model checkpoints & logs
+*.pkl
+*.pkl.gz
+*.msgpack
+
+# Environment files
+.env
+
