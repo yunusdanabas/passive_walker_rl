@@ -1,3 +1,84 @@
 # Passive Walker RL
 
-This package implements a full pipeline—from FSM expert to Brax-scaled PPO—on a minimal bipedal walker in JAX.
+A comprehensive implementation of a reinforcement learning pipeline for a passive bipedal walker using JAX. This project implements a full pipeline from Finite State Machine (FSM) expert demonstrations to Brax-scaled Proximal Policy Optimization (PPO) on a minimal bipedal walker.
+
+## Features
+
+- JAX-native implementation for high-performance computing
+- Integration with Brax physics engine
+- FSM-based expert demonstrations
+- PPO implementation for policy learning
+- MuJoCo model support
+- Comprehensive training and evaluation pipeline
+
+## Installation
+
+The package requires Python 3.9 or 3.10. Install the package using pip:
+
+```bash
+pip install -e .
+```
+
+### Dependencies
+
+The project relies on the following main dependencies:
+- JAX
+- Equinox
+- Optax
+- Brax
+- Gym
+- NumPy
+- SciPy
+- Matplotlib
+- tqdm
+
+## Project Structure
+
+```
+passive_walker_rl/
+├── passive_walker/          # Main package directory
+│   ├── bc/                 # Behavioral cloning components
+│   ├── controllers/        # Controller implementations
+│   ├── envs/              # Environment definitions
+│   ├── ppo/               # PPO implementation
+│   ├── utils/             # Utility functions
+│   └── constants.py       # Project constants
+├── scripts/               # Training and evaluation scripts
+├── data/                  # Data storage
+├── results/              # Training results and logs
+└── passiveWalker_model.xml # MuJoCo model definition
+```
+
+## Usage
+
+### Training
+
+To train the agent using PPO:
+
+```bash
+python scripts/train.py
+```
+
+### Evaluation
+
+To evaluate a trained model:
+
+```bash
+python scripts/evaluate.py
+```
+
+## Model
+
+The project uses a minimal bipedal walker model defined in `passiveWalker_model.xml`. The model is designed to be simple yet capable of demonstrating passive walking dynamics.
+
+## License
+
+[Add your license information here]
+
+## Author
+
+Yunus Emre Danabaş (yunusdanabas@su.edu.tr)
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
