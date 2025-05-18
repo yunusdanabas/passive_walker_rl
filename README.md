@@ -55,30 +55,15 @@ passive_walker_rl/
 
 To train the agent using PPO:
 
-```bash
-python scripts/train.py
-```
 
-### Evaluation
-
-To evaluate a trained model:
-
-```bash
-python scripts/evaluate.py
-```
 
 ## Model
 
 The project uses a minimal bipedal walker model defined in `passiveWalker_model.xml`. The model is designed to be simple yet capable of demonstrating passive walking dynamics.
 
-## License
-
-[Add your license information here]
 
 ## Author
 
-Yunus Emre Danabaş (yunusdanabas@su.edu.tr)
+Yunus Emre Danabaş 
 
-## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
