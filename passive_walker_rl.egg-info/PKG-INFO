@@ -1,0 +1,21 @@
+Metadata-Version: 2.4
+Name: passive_walker_rl
+Version: 0.1.0
+Summary: A JAX-native passive walker PPO pipeline (MuJoCo + Brax).
+Author-email: Yunus Emre Danabaş <yunusdanabas@su.edu.tr>
+Project-URL: Repository, https://github.com/YOUR_USERNAME/passive_walker_rl
+Requires-Python: <3.11,>=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: jax
+Requires-Dist: equinox
+Requires-Dist: optax
+Requires-Dist: brax
+Requires-Dist: gym
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: tqdm
+Requires-Dist: matplotlib
+
+# Passive Walker RL
+
+This package implements a full pipeline—from FSM expert to Brax-scaled PPO—on a minimal bipedal walker in JAX.
