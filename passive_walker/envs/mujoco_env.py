@@ -120,13 +120,12 @@ class PassiveWalkerEnv(gym.Env):
         self.model = mujoco.MjModel.from_xml_path(xml_path)
         self.data = mujoco.MjData(self.model)
         
-        # Define observation space: concatenation of qpos and qvel.
-        n_obs = self.model.nq + self.model.nv
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(n_obs,), dtype=np.float32)
-        # Dummy action space; required by Gym.
+        # Define observation space to match _get_obs() output
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(11,), dtype=np.float32
         )
+        # Define action space for the 3 actuators (hip and two knees)
+        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(3,), dtype=np.float32)
         
         # Setup rendering components if use_gui is True.
         if self.use_gui:
@@ -200,7 +199,7 @@ class PassiveWalkerEnv(gym.Env):
 
         # 2.  uniform geom friction
         friction_val = np.random.uniform(*FRICTION_MIN_MAX)
-        # geom_friction is (ngeom, 3) → set the first coefficient
+        # geom_friction is (ngeom, 3) → set the first coefficient
         self.model.geom_friction[:, 0] = friction_val
 
         # 3.  torso‑mass jitter ±10 %
@@ -411,9 +410,9 @@ class PassiveWalkerEnv(gym.Env):
 
 if __name__ == "__main__":
     # Testing the updated environment.
-    import os
-    dirname = os.path.dirname(__file__)
-    xml_path = os.path.join(dirname, "passiveWalker_model.xml")
+    from pathlib import Path
+    # Path to your MuJoCo XML
+    xml_path = str(Path(__file__).resolve().parents[2] / "passiveWalker_model.xml")
     
     # Test demo mode (FSM for both hip and knees) with GUI.
     print("Testing FSM mode (demo) with GUI:")

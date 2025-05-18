@@ -5,3 +5,6 @@ ROOT       = Path(__file__).resolve().parent.parent
 XML_PATH   = ROOT / "passiveWalker_model.xml"
 BC_DATA    = ROOT / "data" / "bc"
 BC_DATA.mkdir(parents=True, exist_ok=True)
+
+PPO_BC_DATA    = ROOT / "data" / "ppo" / "bc"
+PPO_BC_DATA.mkdir(parents=True, exist_ok=True)
