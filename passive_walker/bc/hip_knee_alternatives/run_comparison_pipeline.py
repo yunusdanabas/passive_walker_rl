@@ -45,8 +45,7 @@ def train_variant(name, train_fn, obs, labels, args, **extra_kwargs):
             batch=args.batch,
             alpha_sym=args.alpha_sym,
             beta_smooth=args.beta_smooth,
-            gamma_energy=args.gamma_energy,
-            weight_decay=args.weight_decay
+            gamma_energy=args.gamma_energy
         )
     else:
         # mse, huber, l1 all define train(model, optimizer, obs, labels, epochs, batch)
@@ -87,12 +86,12 @@ def rollout(model, sim_duration, use_gpu):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--steps",        type=int,   default=20_000, help="Demo steps")
-    p.add_argument("--epochs",       type=int,   default=50,    help="Training epochs")
+    p.add_argument("--steps",        type=int,   default=100_000, help="Demo steps")
+    p.add_argument("--epochs",       type=int,   default=300,    help="Training epochs")
     p.add_argument("--batch",        type=int,   default=32,    help="Batch size")
-    p.add_argument("--hidden-size",  type=int,   default=128,   help="Hidden layer size")
-    p.add_argument("--lr",           type=float, default=1e-4,  help="Learning rate")
-    p.add_argument("--sim-duration", type=float, default=30.0,  help="GUI simulation duration (s)")
+    p.add_argument("--hidden-size",  type=int,   default=256,   help="Hidden layer size")
+    p.add_argument("--lr",           type=float, default=5e-5,  help="Learning rate")
+    p.add_argument("--sim-duration", type=float, default=15.0,  help="GUI simulation duration (s)")
     p.add_argument("--seed",         type=int,   default=42,    help="PRNG seed")
     p.add_argument("--alpha_sym",    type=float, default=0.1,   help="Symmetry weight (combined)")
     p.add_argument("--beta_smooth",  type=float, default=0.1,   help="Smoothness weight (combined)")
@@ -108,7 +107,7 @@ def main():
     print("\n=== Step 1: Collecting demos ===")
     env = PassiveWalkerEnv(
         xml_path=str(XML_PATH),
-        simend=args.steps / 60.0,
+        simend=30,
         use_nn_for_hip=False,
         use_nn_for_knees=False,
         use_gui=False
@@ -123,9 +122,9 @@ def main():
     # 2) train each variant
     variants = {
         "mse":      mse_mod.train,
-        "huber":    huber_mod.train,
-        "l1":       l1_mod.train,
-        "combined": comb_mod.train_combined,
+        "huber":    huber_mod.train_nn_controller,
+        "l1":       l1_mod.train_nn_controller,
+        "combined": comb_mod.train_nn_controller,
     }
     results = {}
     for name, fn in variants.items():
@@ -158,7 +157,7 @@ def main():
     print(f"\nBest variant: {best.upper()} (reward {rewards[best]:.3f})")
     print("Playing best variant for full sim…")
     # final long rollout
-    final_total = rollout(results[best]["model"], args.sim_duration*2, args.gpu)
+    final_total = rollout(results[best]["model"], args.sim_duration, args.gpu)
     print(f"\nFinal long rollout reward = {final_total:.3f}")
 
 if __name__ == "__main__":
