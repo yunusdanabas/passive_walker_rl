@@ -53,10 +53,10 @@ def load_pickle(path):
 # — policy initialization —
 
 def initialize_policy(
-    obs_dim: int,
-    act_dim: int,
-    xml_path: str,
-    simend: float,
+    obs_dim: int = None,
+    act_dim: int = None,
+    xml_path: str = None,
+    simend: float = None,
     sigma: float = 0.1,
     use_gui: bool = False
 ):
@@ -64,8 +64,8 @@ def initialize_policy(
     Initialize a fresh policy and the environment.
     
     Args:
-        obs_dim: Observation dimension
-        act_dim: Action dimension
+        obs_dim: Observation dimension (optional, will be inferred from env if None)
+        act_dim: Action dimension (optional, will be inferred from env if None)
         xml_path: Path to MuJoCo XML model file
         simend: Simulation end time
         sigma: Standard deviation for exploration
@@ -74,8 +74,7 @@ def initialize_policy(
     Returns:
         Tuple of (env, get_scaled_action, get_env_action, policy_model)
     """
-    key = jax.random.PRNGKey(0)
-    policy_model = HipKneeController(input_size=obs_dim, hidden_size=128, key=key)
+    # First create environment to get observation and action spaces
     env = PassiveWalkerEnv(
         xml_path=xml_path,
         simend=simend,
@@ -83,6 +82,15 @@ def initialize_policy(
         use_nn_for_knees=True,
         use_gui=use_gui,
     )
+    
+    # Infer dimensions from environment if not provided
+    if obs_dim is None:
+        obs_dim = env.observation_space.shape[0]
+    if act_dim is None:
+        act_dim = env.action_space.shape[0]
+    
+    key = jax.random.PRNGKey(0)
+    policy_model = HipKneeController(input_size=obs_dim, hidden_size=128, key=key)
 
     def get_scaled(obs_jnp: jnp.ndarray) -> jnp.ndarray:
         return policy_model(obs_jnp)

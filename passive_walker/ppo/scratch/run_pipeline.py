@@ -17,9 +17,10 @@ import glfw
 
 from . import DATA_DIR, XML_PATH, set_device
 from .utils import initialize_policy, load_pickle
+from .train import Critic
 
 def ensure(cmd):
-    print("▶", " ".join(cmd))
+    print("", " ".join(cmd))
     subprocess.check_call(cmd)
 
 def main():

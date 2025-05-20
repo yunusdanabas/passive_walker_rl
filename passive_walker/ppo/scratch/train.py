@@ -136,12 +136,23 @@ def main():
                 policy = eqx.apply_updates(policy, updates)
                 
                 # Critic update
-                def vf_loss(critic_, obs_, ret_):
-                    return jnp.mean((jax.vmap(critic_)(obs_) - ret_)**2)
-                    
-                vf_grads = jax.grad(vf_loss)(critic, obs[b], ret_j[b])
+                def vf_loss_fn(critic_params, critic_static, obs_, ret_):
+                    critic_ = eqx.combine(critic_params, critic_static)
+                    pred = jax.vmap(critic_)(obs_)
+                    return jnp.mean((pred - ret_)**2)
+                
+                # Split critic into parameters and static components
+                critic_params, critic_static = eqx.partition(critic, eqx.is_array)
+                
+                # Compute gradients with respect to parameters only
+                vf_grads = jax.grad(vf_loss_fn)(critic_params, critic_static, obs[b], ret_j[b])
+                
+                # Update parameters
                 vf_updates, critic_state = critic_opt.update(vf_grads, critic_state)
-                critic = eqx.apply_updates(critic, vf_updates)
+                critic_params = optax.apply_updates(critic_params, vf_updates)
+                
+                # Recombine parameters with static components
+                critic = eqx.combine(critic_params, critic_static)
 
         # Print progress and save to history
         avg_reward = rewards.mean()

@@ -25,7 +25,7 @@ def ensure(cmd):
     Args:
         cmd: List of command arguments
     """
-    print("▶", " ".join(cmd))
+    print("", " ".join(cmd))
     subprocess.check_call(cmd)
 
 def main():
