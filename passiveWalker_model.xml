@@ -2,12 +2,11 @@
 
 <mujoco model="PassiveWalker_YunusEmreDanabas">
 
-<option timestep="0.001" gravity="1.94894614  0.         -9.61445313"/>
-
- <!--  
   <option timestep="0.001" gravity="0  0 -9.81"/>
- -->
 
+ <!-- Gravity for the ramp
+  <option timestep="0.001" gravity="1.94894614  0.         -9.61445313"/>
+ -->
 
   <asset>
     <!-- Textures and materials -->
@@ -98,22 +97,6 @@
            gaintype="fixed"   gainprm="1000"
            biastype="affine"  biasprm="0 -1000 -100"
            ctrllimited="true" ctrlrange="-0.3 0.3"/>
-
-  <!--  
-
-    <general name="hip_act" joint="hip" ctrllimited="true" ctrlrange="-50 50"/>
-    <general name="left_knee_act" joint="left_knee" ctrllimited="true" ctrlrange="-300 300"/>
-    <general name="right_knee_act" joint="right_knee" ctrllimited="true" ctrlrange="-300 300"/>
-
-    <position name="pos_hip" joint="hip" kp="5"/>
-		<position name="pos_left_knee" joint="left_knee" kp="1000"/>
-		<position name="pos_right_knee" joint="right_knee" kp="1000"/>
-
-    <velocity name="vel_hip" joint="hip" kv="1"/>
-		<velocity name="vel_left_knee" joint="left_knee" kv="100"/>
-		<velocity name="vel_right_knee" joint="right_knee" kv="100"/>
-
-    -->
 
   </actuator>
 

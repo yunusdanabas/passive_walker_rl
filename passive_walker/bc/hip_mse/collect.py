@@ -16,7 +16,8 @@ import jax.numpy as jnp
 
 from passive_walker.envs.mujoco_fsm_env import PassiveWalkerEnv
 from passive_walker.utils.io              import save_pickle
-from . import DATA_DIR, XML_PATH, set_device
+
+from . import DATA_BC, XML_PATH, set_device
 
 
 def collect_demo_data(env, num_steps: int = 1000):
@@ -77,7 +78,7 @@ def main():
 
     print(f"[collect] collected obs={demo_obs.shape}, labels={demo_labels.shape}")
 
-    out_file = DATA_DIR / "hip_mse_demos.pkl"
+    out_file = DATA_BC / "hip_mse" / "hip_mse_demos.pkl"
     save_pickle(
         {"obs":   np.array(demo_obs,   dtype=np.float32),
          "labels": np.array(demo_labels, dtype=np.float32)},

@@ -20,7 +20,7 @@ import equinox as eqx
 import optax
 
 from passive_walker.controllers.nn.knee_nn import KneeController
-from passive_walker.bc.plotters import plot_loss_curve
+from passive_walker.bc.utils import plot_loss_curve
 from . import DATA_DIR, set_device
 
 def train_nn_controller(nn_controller, optimizer, demo_obs, demo_labels, num_epochs, batch_size, plot_loss=False):

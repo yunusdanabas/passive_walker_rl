@@ -9,7 +9,7 @@ Usage:
 
 import argparse, pickle, numpy as np, jax, jax.numpy as jnp, optax, equinox as eqx
 from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
-from passive_walker.bc.plotters import plot_loss_curve
+from passive_walker.bc.utils import plot_loss_curve
 from . import DATA_DIR, set_device
 
 
