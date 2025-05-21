@@ -173,7 +173,7 @@ def main():
         description="Run comparison pipeline for all BC variants"
     )
     p.add_argument(
-        "--steps", type=int, default=20_000,
+        "--steps", type=int, default=50_000,
         help="Number of simulation steps to use for training"
     )
     p.add_argument(

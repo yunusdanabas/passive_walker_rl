@@ -15,13 +15,10 @@ Usage:
 """
 
 from pathlib import Path
-import pickle, gzip
-
 import jax
-import jax.numpy as jnp
 import equinox as eqx
-
 from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
+
 from passive_walker.constants import (
     ROOT,
     XML_PATH,

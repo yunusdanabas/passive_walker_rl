@@ -21,33 +21,38 @@ from passive_walker.envs.mujoco_env import PassiveWalkerEnv
 from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
 from passive_walker.ppo.bc_init import DATA_PPO_BC
 
-# — serialization —
+from pathlib import Path
+import jax
+import equinox as eqx
+from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
 
-def save_pickle(obj, path):
+def save_model(model, model_file: Path):
     """
-    Save an object to a pickle file.
+    Save a trained model to a file.
+
+    Args:
+        model: Trained model to save
+        model_file: Path where to save the model
+    """
+    eqx.tree_serialise_leaves(model_file, model)
+
+
+def load_model(path: Path,hidden_size=128,input_size=11):
+    """
+    Load model parameters from file.
     
     Args:
-        obj: Python object to serialize
-        path: Path to save the pickle file
-    """
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "wb") as f:
-        pickle.dump(obj, f)
-
-def load_pickle(path):
-    """
-    Load an object from a pickle file.
-    
-    Args:
-        path: Path to the pickle file
+        path: Path to the saved model
         
     Returns:
-        The deserialized object
+        Loaded model
     """
-    with open(path, "rb") as f:
-        return pickle.load(f)
+    model = HipKneeController(
+        input_size=input_size,
+        hidden_size=hidden_size,
+        key=jax.random.PRNGKey(42)
+    )
+    return eqx.tree_deserialise_leaves(path, model)
 
 # — policy initialization from BC checkpoint —
 
@@ -75,7 +80,7 @@ def initialize_policy(
       bc_policy_model: The loaded BC policy model
     """
     # Load the BC model
-    loaded_data = load_pickle(model_path)
+    loaded_data = load_model(model_path)
     
     # Handle different possible data structures
     if isinstance(loaded_data, tuple):
@@ -280,7 +285,7 @@ def analyze_training_log(log_path=DATA_PPO_BC / "ppo_training_log.pkl", save_pat
     Returns:
         None
     """
-    log = load_pickle(log_path)
+    log = load_model(log_path)
     rewards = log["rewards"]
     plot_training_rewards(rewards, save_path=save_path, title=title)
 
