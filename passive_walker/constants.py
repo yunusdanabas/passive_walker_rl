@@ -35,8 +35,10 @@ RESULTS_PPO_SCRATCH.mkdir(parents=True, exist_ok=True)
 def set_device(use_gpu: bool):
     """
     Select JAX CPU vs GPU backend.
-    
+
     Args:
         use_gpu: True to use GPU, False to use CPU
     """
-    os.environ["JAX_PLATFORM_NAME"] = "gpu" if use_gpu else "cpu"
+    device = "gpu" if use_gpu else "cpu"
+    os.environ["JAX_PLATFORM_NAME"] = device
+    print(f"Device set to: {device}")
