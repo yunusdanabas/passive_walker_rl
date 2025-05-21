@@ -5,11 +5,13 @@ A comprehensive implementation of a reinforcement learning pipeline for a passiv
 ## Features
 
 - JAX-native implementation for high-performance computing
-- Integration with Brax physics engine
-- FSM-based expert demonstrations
+- Integration with Brax physics engine for efficient rigid body dynamics
+- FSM-based expert demonstrations for behavioral cloning
 - PPO implementation for policy learning
-- MuJoCo model support
+- MuJoCo model support with automatic conversion to Brax
 - Comprehensive training and evaluation pipeline
+- GPU acceleration support
+- Vectorized environment rollouts for efficient training
 
 ## Installation
 
@@ -22,15 +24,16 @@ pip install -e .
 ### Dependencies
 
 The project relies on the following main dependencies:
-- JAX
-- Equinox
-- Optax
-- Brax
-- Gym
-- NumPy
-- SciPy
-- Matplotlib
-- tqdm
+- JAX - For high-performance numerical computing
+- Equinox - For neural network implementation
+- Optax - For optimization algorithms
+- Brax - For physics simulation
+- MuJoCo - For model definition and conversion
+- Gym - For environment interfaces
+- NumPy - For numerical operations
+- SciPy - For scientific computing
+- Matplotlib - For visualization
+- tqdm - For progress tracking
 
 ## Project Structure
 
@@ -38,6 +41,10 @@ The project relies on the following main dependencies:
 passive_walker_rl/
 ├── passive_walker/          # Main package directory
 │   ├── bc/                 # Behavioral cloning components
+│   ├── brax/              # Brax physics engine integration
+│   │   ├── convert_xml.py # MuJoCo to Brax converter
+│   │   ├── sweep_ppo.py   # PPO hyperparameter sweep
+│   │   └── utils.py       # Brax utilities
 │   ├── controllers/        # Controller implementations
 │   ├── envs/              # Environment definitions
 │   ├── ppo/               # PPO implementation
@@ -45,25 +52,60 @@ passive_walker_rl/
 │   └── constants.py       # Project constants
 ├── scripts/               # Training and evaluation scripts
 ├── data/                  # Data storage
+│   └── brax/             # Brax-specific data
+│       └── system.pkl.gz  # Cached Brax System
 ├── results/              # Training results and logs
 └── passiveWalker_model.xml # MuJoCo model definition
 ```
 
 ## Usage
 
+### Converting MuJoCo Model to Brax
+
+To convert the MuJoCo XML model to Brax System format:
+
+```bash
+python -m passive_walker.brax.convert_xml --xml passiveWalker_model.xml
+```
+
 ### Training
 
 To train the agent using PPO:
 
+```bash
+python -m passive_walker.brax.sweep_ppo
+```
 
+For a lightweight test run:
+
+```bash
+python -m passive_walker.brax.tiny_ppo_sanity
+```
+
+### Importing in Python
+
+```python
+from passive_walker.brax import XML_PATH, SYSTEM_PICKLE, set_device
+```
 
 ## Model
 
-The project uses a minimal bipedal walker model defined in `passiveWalker_model.xml`. The model is designed to be simple yet capable of demonstrating passive walking dynamics.
+The project uses a minimal bipedal walker model defined in `passiveWalker_model.xml`. The model is designed to be simple yet capable of demonstrating passive walking dynamics. The model is automatically converted to Brax format for efficient simulation and training.
 
+## Performance
+
+The implementation leverages JAX and Brax for high-performance computing:
+- GPU acceleration support
+- Vectorized environment rollouts
+- Efficient physics simulation
+- Parallel training capabilities
 
 ## Author
 
-Yunus Emre Danabaş 
+Yunus Emre Danabaş
+
+## Version
+
+Current version: 0.1.0
 
 
