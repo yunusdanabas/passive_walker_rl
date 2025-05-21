@@ -1,0 +1,2 @@
+seed,reward_scale,lr,arch,reward,file
+2,1.0,0.001,tiny,0.03664425387978554,/home/yunusdanabas/ENS492/passive_walker_rl/data/brax/sweep_results/run_ab81ae6a.msgpack

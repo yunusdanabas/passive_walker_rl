@@ -192,7 +192,7 @@ class PassiveWalkerEnv(gym.Env):
                  use_gui=True, 
                  cfg: WalkerCfg = WalkerCfg(),
                  rng_seed: int = None,
-                 randomize_physics: bool = True):
+                 randomize_physics: bool = False):
         
         super().__init__()
         self.simend = simend

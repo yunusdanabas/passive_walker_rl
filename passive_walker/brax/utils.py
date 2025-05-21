@@ -6,6 +6,8 @@ Utility helpers for the Brax sub-package
   :class:`brax.System`.
 * ``check_and_save``           – quick numeric sanity check **+** gzip-pickle
   to disk (with an optional MuJoCo joint/actuator dump for debugging).
+* ``uint64_patch``            – helper for Brax <-> JAX printing / logging.
+* ``visualize_in_mujoco``     – visualize learned Brax policy in MuJoCo GUI.
 
 Both functions are *pure helpers* – they never mutate the Brax ``System`` you
 pass in.
@@ -14,11 +16,16 @@ pass in.
 from __future__ import annotations
 from pathlib import Path
 import gzip, pickle, sys as _sys
-
+import time
+import os
 import numpy as np
 import pandas as pd
-import jax.numpy as jnp
+import jax, jax.numpy as jnp
 from IPython.display import Markdown, display
+
+from passive_walker.brax import XML_PATH
+
+import brax.training.types as _bt
 
 
 # ---------------------------------------------------------------------------
@@ -150,3 +157,162 @@ def check_and_save(sys, out: Path, *, verbose: bool = True) -> None:
         print("Basic numeric sanity checks passed ✓")
         print(f"System pickled to: {out.resolve()}")
         print("-" * 40)
+
+
+# ---------------------------------------------------------------------------
+# Brax <-> JAX printing / logging helpers
+# ---------------------------------------------------------------------------
+def uint64_patch():
+    """Patch Brax's UInt64 type for better JAX compatibility."""
+    def _uint64_to_numpy(self):
+        return (int(self.hi) << 32) | int(self.lo)
+
+    _bt.UInt64.to_numpy = _uint64_to_numpy          # type: ignore[attr-defined]
+    _bt.UInt64.__int__  = lambda self: _uint64_to_numpy(self)     # type: ignore[attr-defined]
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Sweep-results plotting helpers
+# ──────────────────────────────────────────────────────────────────────────
+import pandas as _pd, matplotlib.pyplot as _plt
+from passive_walker.brax import RESULTS_BRAX, DATA_BRAX
+
+def load_sweep_df(csv: str | Path | None = None) -> _pd.DataFrame:
+    """
+    Load the aggregated CSV produced by ``sweep_ppo.py``.
+    """
+    csv = Path(csv) if csv else RESULTS_BRAX / "sweep_agg.csv"
+    if not csv.exists():
+        raise FileNotFoundError(f"sweep CSV not found: {csv}")
+    return _pd.read_csv(csv)
+
+def barplot_mean_reward(df: _pd.DataFrame | None = None,
+                        *, save: bool | str = True):
+    """
+    Bar-plot **mean ± std** reward for every (reward_scale, lr) combo.
+
+    Parameters
+    ----------
+    df   : DataFrame returned by :func:`load_sweep_df`
+    save : ``True`` → write to *results/brax/sweep_barplot.png* or give
+           an explicit filepath.  ``False`` → no file output.
+    """
+    if df is None:
+        df = load_sweep_df()
+    pl = (df.groupby(["reward_scale","lr"], as_index=False)
+            .agg(mean_reward=("reward","mean"),
+                 std_reward =("reward","std")))
+
+    ax = pl.pivot(index="reward_scale", columns="lr",
+                  values="mean_reward").plot.bar(
+            yerr = pl.pivot(index="reward_scale", columns="lr",
+                            values="std_reward"),
+            capsize=3, rot=0, figsize=(6,4))
+    ax.set_xlabel("Reward scaling"); ax.set_ylabel("Final episode reward")
+    ax.set_title("Passive Walker — PPO sweep")
+    _plt.tight_layout()
+    if save:
+        fp = (RESULTS_BRAX / "sweep_barplot.png") if save is True else Path(save)
+        _plt.savefig(fp, dpi=150); print("saved →", fp)
+    _plt.show()
+
+def heatmap_lr_arch(df: _pd.DataFrame | None = None,
+                    *, save: bool | str = False, cmap="viridis"):
+    """
+    Convenience heat-map: **learning-rate × network-arch** → mean reward.
+    """
+    if df is None:
+        df = load_sweep_df()
+    hm = (df.groupby(["arch","lr"], as_index=False)
+            .agg(mean_reward=("reward","mean")))
+    pivot = hm.pivot(index="arch", columns="lr", values="mean_reward")
+    _plt.figure(figsize=(8,3))
+    _plt.imshow(pivot.values, aspect="auto", cmap=cmap,
+                origin="lower", interpolation="nearest")
+    _plt.xticks(range(len(pivot.columns)), pivot.columns, rotation=45)
+    _plt.yticks(range(len(pivot.index)),   pivot.index)
+    _plt.colorbar(label="mean reward")
+    _plt.title("Reward heat-map")
+    _plt.tight_layout()
+    if save:
+        fp = (RESULTS_BRAX / "sweep_heatmap.png") if save is True else Path(save)
+        _plt.savefig(fp, dpi=150); print("saved →", fp)
+    _plt.show()
+
+
+# ---------------------------------------------------------------------------
+# MuJoCo visualization helper
+# ---------------------------------------------------------------------------
+def visualize_in_mujoco(
+    policy_fn,
+    xml_path: str,
+    duration_s: float = 10.0,
+    rng_seed: int = 0,
+    use_nn_for_hip: bool = True,
+    use_nn_for_knees: bool = True,
+):
+    """
+    Launch the given policy in MuJoCo for a GUI rollout.
+
+    Args:
+      policy_fn:           Callable(obs: jnp.ndarray, key) → (action, _)
+      xml_path:            Path to passiveWalker_model.xml
+      duration_s:          Simulation time (seconds)
+      rng_seed:            RNG seed for env reset
+      use_nn_for_hip:      Whether to use NN control on the hip
+      use_nn_for_knees:    Whether to use NN control on the knees
+    """
+    import time
+    import numpy as np
+    import jax, jax.numpy as jnp
+    from mujoco.glfw import glfw
+    from passive_walker.envs.mujoco_env import PassiveWalkerEnv
+
+    # 1) build the env & force window/context creation
+    mj_env = PassiveWalkerEnv(
+        xml_path=str(xml_path),
+        simend=duration_s,
+        use_nn_for_hip=use_nn_for_hip,
+        use_nn_for_knees=use_nn_for_knees,
+        use_gui=True,
+        rng_seed=rng_seed,
+    )
+    # do one render to ensure the GLFW window and context are initialized
+    obs = mj_env.reset()
+    mj_env.render()
+
+    # 2) rollout loop
+    key = jax.random.PRNGKey(rng_seed)
+    done = False
+    total_reward = 0.0
+    t0 = time.time()
+
+    while (not done
+           and mj_env.window is not None
+           and not glfw.window_should_close(mj_env.window)):
+        key, sub = jax.random.split(key)
+
+        # policy_fn may return (action, extras)
+        out = policy_fn(jnp.array(obs), sub)
+        act_jax = out[0] if isinstance(out, (tuple, list)) else out
+        
+        # Ensure action is 1D array
+        if isinstance(act_jax, (tuple, list)):
+            act_jax = jnp.array(act_jax)
+        act_jax = jnp.squeeze(act_jax)
+        
+        # Convert to numpy and ensure correct shape
+        act = np.asarray(act_jax, dtype=np.float32)
+        if act.ndim > 1:
+            act = act.flatten()
+
+        obs, reward, done, _ = mj_env.step(act)
+        total_reward += float(reward)
+
+        mj_env.render(mode="human")
+
+    elapsed = time.time() - t0
+    print(f"\nEpisode finished in {elapsed:.1f}s  |  total reward = {total_reward:.2f}")
+
+    # 3) clean up
+    mj_env.close()

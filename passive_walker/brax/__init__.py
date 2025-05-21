@@ -58,8 +58,4 @@ SYSTEM_PICKLE: Path = DATA_BRAX / "system.pkl.gz"
 RESULTS_BRAX: Path = ROOT / "results" / "brax"
 RESULTS_BRAX.mkdir(parents=True, exist_ok=True)
 
-"""Sub-package that hosts Brax-native environments."""
 
-from passive_walker.envs.brax_env import BraxPassiveWalker  # re-export for easy import
-
-__all__ = ["BraxPassiveWalker"]
