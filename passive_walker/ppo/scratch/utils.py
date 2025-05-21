@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from passive_walker.envs.mujoco_env import PassiveWalkerEnv
 from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
-from . import DATA_DIR
+from passive_walker.ppo.scratch import DATA_PPO_SCRATCH
 
 # — serialization —
 
@@ -93,13 +93,14 @@ def initialize_policy(
     policy_model = HipKneeController(input_size=obs_dim, hidden_size=128, key=key)
 
     def get_scaled(obs_jnp: jnp.ndarray) -> jnp.ndarray:
+        """Get scaled actions from policy."""
         return policy_model(obs_jnp)
 
     def get_env(obs_jnp: jnp.ndarray) -> np.ndarray:
+        """Get environment actions from policy."""
         return np.array(get_scaled(obs_jnp), dtype=np.float32)
 
     return env, get_scaled, get_env, policy_model
-
 
 # — on‐policy rollout buffer —
 
@@ -214,13 +215,13 @@ def policy_log_prob(
 
 # — Plotting utilities —
 
-def plot_training_rewards(rewards, save_path=DATA_DIR / "ppo_training_curve.png", title="Average Reward per PPO Iteration", print_stats=True):
+def plot_training_rewards(rewards, save_path=DATA_PPO_SCRATCH / "ppo_training_curve.png", title="Average Reward per PPO Iteration", print_stats=True):
     """
     Plot average reward per PPO iteration.
     
     Args:
         rewards: List or array of average rewards per iteration
-        save_path: Path to save the figure (default: DATA_DIR/ppo_training_curve.png)
+        save_path: Path to save the figure (default: DATA_PPO_SCRATCH/ppo_training_curve.png)
         title: Title for the plot
         print_stats: Whether to print statistics about the rewards
         
@@ -253,13 +254,13 @@ def plot_training_rewards(rewards, save_path=DATA_DIR / "ppo_training_curve.png"
             percent_improvement = (improvement / abs(rewards[0] + 1e-10)) * 100  # Avoid division by zero
             print(f"Improvement: {improvement:.2f} ({percent_improvement:.1f}%)")
 
-def analyze_training_log(log_path=DATA_DIR / "ppo_training_log.pkl", save_path=DATA_DIR / "ppo_training_curve.png", title="Average Reward per PPO Iteration"):
+def analyze_training_log(log_path=DATA_PPO_SCRATCH / "ppo_training_log.pkl", save_path=DATA_PPO_SCRATCH / "ppo_training_curve.png", title="Average Reward per PPO Iteration"):
     """
     Load and analyze a training log, plotting the rewards.
     
     Args:
-        log_path: Path to the training log pickle file (default: DATA_DIR/ppo_training_log.pkl)
-        save_path: Path to save the plot (default: DATA_DIR/ppo_training_curve.png) 
+        log_path: Path to the training log pickle file (default: DATA_PPO_SCRATCH/ppo_training_log.pkl)
+        save_path: Path to save the plot (default: DATA_PPO_SCRATCH/ppo_training_curve.png) 
         title: Title for the plot
         
     Returns:
@@ -269,7 +270,7 @@ def analyze_training_log(log_path=DATA_DIR / "ppo_training_log.pkl", save_path=D
     rewards = log["rewards"]
     plot_training_rewards(rewards, save_path=save_path, title=title)
 
-def plot_joint_and_reward(traj_obs, rewards, save_prefix=DATA_DIR / "ppo_eval"):
+def plot_joint_and_reward(traj_obs, rewards, save_prefix=DATA_PPO_SCRATCH / "ppo_eval"):
     """
     Plot joint positions and rewards over time.
     

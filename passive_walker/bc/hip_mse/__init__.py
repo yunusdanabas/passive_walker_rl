@@ -1,7 +1,7 @@
 # passive_walker/bc/hip_mse/__init__.py
 
 """
-hip_mse – Behaviour cloning for hip-only controller with MSE loss.
+hip_mse - Behaviour cloning for hip-only controller with MSE loss.
 
 This module implements a complete pipeline for training a neural network
 to mimic a Finite State Machine (FSM) controller for the passive walker's hip joint.
@@ -27,3 +27,6 @@ from passive_walker.constants import (
     RESULTS_PPO_SCRATCH,
     set_device
 )
+
+DATA_BC_HIP_MSE = DATA_BC / "hip_mse"
+DATA_BC_HIP_MSE.mkdir(parents=True, exist_ok=True)

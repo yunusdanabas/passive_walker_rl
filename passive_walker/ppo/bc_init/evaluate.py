@@ -14,8 +14,8 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from mujoco.glfw import glfw
 
-from . import XML_PATH, set_device
-from .utils import load_pickle
+from passive_walker.ppo.bc_init import XML_PATH, set_device, DATA_PPO_BC
+from passive_walker.ppo.bc_init.utils import load_pickle
 from passive_walker.envs.mujoco_env import PassiveWalkerEnv
 
 def main():
@@ -24,6 +24,7 @@ def main():
     p.add_argument("--policy",       type=str,              required=True)
     p.add_argument("--sim-duration", type=float, default=30.0)
     p.add_argument("--gpu",          action="store_true")
+    p.add_argument("--hz",           type=int,   default=200)
     args = p.parse_args()
 
     # Set device (CPU/GPU)
@@ -45,17 +46,22 @@ def main():
     obs = env.reset()
     traj_obs, rewards = [], []
 
-    while not glfw.window_should_close(env.window):
-        traj_obs.append(obs)
-        obs_j = jnp.array(obs, dtype=jnp.float32)
-        act  = np.array(policy(obs_j))
-        obs, r, done, _ = env.step(act)
-        rewards.append(r)
-        env.render()
-        if done:
-            break
-
-    env.close()
+    try:
+        while True:
+            traj_obs.append(obs)
+            obs_j = jnp.array(obs, dtype=jnp.float32)
+            act  = np.array(policy(obs_j))
+            obs, r, done, _ = env.step(act)
+            rewards.append(r)
+            env.render()  # ensures window exists
+            if done:
+                break
+            if env.window is not None and glfw.window_should_close(env.window):
+                break
+    finally:
+        # Ensure proper cleanup
+        if env.window is not None:
+            env.close()
 
     # Convert to numpy arrays for plotting
     traj_obs = np.array(traj_obs)
@@ -67,10 +73,11 @@ def main():
     for i in range(min(3, traj_obs.shape[1]//2)):
         plt.plot(t, traj_obs[:,i], label=f"joint {i}")
     plt.title("Joint Positions"); plt.legend(); plt.show()
+    plt.savefig(DATA_PPO_BC / f"ppo_joint_positions_{args.hz}hz.png")
 
     # Plot rewards
     plt.figure(figsize=(8,3))
     plt.plot(t, rewards); plt.title("Reward per step"); plt.show()
-
+    plt.savefig(DATA_PPO_BC / f"ppo_rewards_{args.hz}hz.png")
 if __name__ == "__main__":
     main()

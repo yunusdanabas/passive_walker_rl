@@ -1,21 +1,39 @@
 """
 Collect hip-knee FSM demos for BC (records hip, left-knee, right-knee).
 
+This script runs the environment in FSM demo mode (hip and knees controlled by FSM)
+and records observations along with the FSM actions at each step.
+
+The environment uses a Finite State Machine (FSM) to control both hip and knee joints.
+The collected data consists of state observations and corresponding actions that can be
+used for behavioral cloning training.
+
 Usage:
-    python -m passive_walker.bc.hip_knee_mse.collect [--steps N] [--gpu]
+    python -m passive_walker.bc.hip_knee_mse.collect [--steps N] [--hz H] [--gpu]
 """
 
 import argparse
 import numpy as np
 import jax.numpy as jnp
+from pathlib import Path
 
 from passive_walker.envs.mujoco_fsm_env import PassiveWalkerEnv
-from passive_walker.utils.io            import save_pickle
-from . import DATA_DIR, XML_PATH, set_device
+from passive_walker.utils.io import save_pickle
+from passive_walker.bc.hip_knee_mse import DATA_BC_HIP_KNEE_MSE, XML_PATH, set_device
 
 
-def collect_demo_data(env, num_steps: int):
-    """Return (obs, labels) where labels = [hip, left_knee, right_knee]."""
+def collect_demo_data(env: PassiveWalkerEnv, num_steps: int):
+    """
+    Collect (obs, [hip, left_knee, right_knee]) pairs from the FSM controller.
+
+    Args:
+        env:           PassiveWalkerEnv configured with use_nn_for_hip=False, use_nn_for_knees=False
+        num_steps:     Total simulation steps to record
+
+    Returns:
+        obs_array:     jnp.ndarray of shape (num_steps, obs_dim)
+        label_array:   jnp.ndarray of shape (num_steps, 3)
+    """
     obs_buf, lbl_buf = [], []
     obs = env.reset()
     for _ in range(num_steps):
@@ -32,30 +50,54 @@ def collect_demo_data(env, num_steps: int):
 
 
 def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("--steps", type=int, default=20_000)
-    p.add_argument("--gpu",   action="store_true")
+    """Main function to collect demonstration data."""
+    p = argparse.ArgumentParser(
+        description="Collect FSM hip+knee demos for BC training"
+    )
+    p.add_argument(
+        "--steps", type=int, default=20_000,
+        help="Number of simulation steps to collect"
+    )
+    p.add_argument(
+        "--hz", type=int, default=200,
+        help="Simulation frequency in Hz"
+    )
+    p.add_argument(
+        "--gpu", action="store_true",
+        help="Use GPU if available (sets JAX_PLATFORM_NAME=gpu)"
+    )
     args = p.parse_args()
 
+    # Check for existing file with same step count
+    out_file = DATA_BC_HIP_KNEE_MSE / f"hip_knee_mse_demos_{args.steps}steps.pkl"
+    if out_file.exists():
+        print(f"[collect] Found existing file with {args.steps} steps → {out_file}")
+        return
+
+    # configure JAX backend
     set_device(args.gpu)
 
+    # build the FSM-only environment
     env = PassiveWalkerEnv(
         xml_path=str(XML_PATH),
-        simend=args.steps / 60.0,
+        simend=args.steps / args.hz,
         use_nn_for_hip=False,
         use_nn_for_knees=False,
         use_gui=False,
     )
 
-    print(f"[collect] running {args.steps} steps …")
-    obs, labels = collect_demo_data(env, args.steps)
+    print(f"[collect] running {args.steps} steps…")
+    demo_obs, demo_labels = collect_demo_data(env, num_steps=args.steps)
     env.close()
-    print(f"[collect] obs={obs.shape}, labels={labels.shape}")
 
-    out = DATA_DIR / "hip_knee_mse_demos.pkl"
-    save_pickle({"obs": np.array(obs,    dtype=np.float32),
-                 "labels": np.array(labels, dtype=np.float32)}, out)
-    print(f"[collect] saved → {out}")
+    print(f"[collect] collected obs={demo_obs.shape}, labels={demo_labels.shape}")
+
+    save_pickle(
+        {"obs": np.array(demo_obs, dtype=np.float32),
+         "labels": np.array(demo_labels, dtype=np.float32)},
+        out_file
+    )
+    print(f"[collect] saved → {out_file}")
 
 
 if __name__ == "__main__":

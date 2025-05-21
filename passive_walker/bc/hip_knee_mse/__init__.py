@@ -1,19 +1,30 @@
 """
-hip_knee_mse - BC for hip + knee controller with MSE loss.
+hip_knee_mse - Behaviour cloning for hip+knee controller with MSE loss.
+
+This module implements a complete pipeline for training a neural network
+to mimic a Finite State Machine (FSM) controller for the passive walker's hip and knee joints.
+The pipeline consists of three main components:
+1. Data collection from FSM demonstrations
+2. Neural network training using MSE loss
+3. Evaluation of the trained controller
 
 Usage:
-  python -m passive_walker.bc.hip_knee_mse.collect  [--steps N] [--gpu]
-  python -m passive_walker.bc.hip_knee_mse.train    [--epochs E] [--gpu]
-  python -m passive_walker.bc.hip_knee_mse.run_pipeline [--gpu]
+    python -m passive_walker.bc.hip_knee_mse.collect      --gpu  # Collect demonstration data
+    python -m passive_walker.bc.hip_knee_mse.train        --gpu  # Train neural network
+    python -m passive_walker.bc.hip_knee_mse.run_pipeline --gpu  # Run complete pipeline
 """
 
-from pathlib import Path
+from passive_walker.constants import (
+    ROOT,
+    XML_PATH,
+    DATA_DIR,
+    DATA_BC,
+    DATA_PPO_BC,
+    RESULTS_BC,
+    RESULTS_PPO_BC,
+    RESULTS_PPO_SCRATCH,
+    set_device
+)
 
-DATA_DIR = Path(__file__).resolve().parents[3] / "data" / "bc"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-XML_PATH = str(Path(__file__).resolve().parents[3] / "passiveWalker_model.xml")
-
-def set_device(use_gpu: bool):
-    import os
-    os.environ.setdefault("JAX_PLATFORM_NAME", "gpu" if use_gpu else "cpu")
+DATA_BC_HIP_KNEE_MSE = DATA_BC / "hip_knee_mse"
+DATA_BC_HIP_KNEE_MSE.mkdir(parents=True, exist_ok=True)

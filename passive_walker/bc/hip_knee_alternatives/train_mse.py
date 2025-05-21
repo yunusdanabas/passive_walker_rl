@@ -1,48 +1,76 @@
 # passive_walker/bc/hip_knee_alternatives/train_mse.py
 """
-Train with MSE loss.
-"""
-import argparse, pickle, numpy as np, jax, jax.numpy as jnp, optax, equinox as eqx
-from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
-from passive_walker.bc.utils import plot_loss_curve
-from . import DATA_DIR, set_device
+Train a BC model for hip and knee control using MSE loss.
 
-def train(model, opt, obs, labels, epochs, batch):
-    opt_st = opt.init(eqx.filter(model, eqx.is_array))
-    hist = []
-    @jax.jit
-    def loss_fn(m,o,y): return jnp.mean((jax.vmap(m)(o)-y)**2)
-    @jax.jit
-    def step(m,st,o,y):
-        g= jax.grad(loss_fn)(m,o,y)
-        u,st=opt.update(g,st); return eqx.apply_updates(m,u), st
-    n=obs.shape[0]
-    for e in range(epochs):
-        perm=np.random.permutation(n)
-        for i in range(0,n,batch):
-            idx=perm[i:i+batch]
-            model,opt_st=step(model,opt_st,obs[idx],labels[idx])
-        l=float(loss_fn(model,obs,labels)); hist.append(l)
-        print(f"[MSE] epoch {e+1}/{epochs} loss={l:.4f}")
-    return model,hist
+This script trains a neural network to predict both hip and knee actions
+using behavioral cloning from FSM demonstrations. The model is trained
+to minimize the mean squared error between predicted and demonstrated actions.
+
+Usage:
+    python -m passive_walker.bc.hip_knee_alternatives.train_mse [--steps N] [--hz H] [--gpu]
+"""
+
+import argparse
+import numpy as np
+import jax
+import jax.numpy as jnp
+from pathlib import Path
+
+from passive_walker.bc.hip_knee_alternatives import (
+    DATA_BC_HIP_KNEE_ALTERNATIVES,
+    MODEL_BC_HIP_KNEE_ALTERNATIVES,
+    load_demo_data,
+    set_device,
+    train_model,
+    save_model,
+)
+
 
 def main():
-    p=argparse.ArgumentParser(); 
-    p.add_argument("--epochs",type=int,default=50)
-    p.add_argument("--batch", type=int,default=32)
-    p.add_argument("--lr",    type=float,default=1e-4)
-    p.add_argument("--gpu",   action="store_true")
-    args=p.parse_args()
+    """Main function to train the BC model with MSE loss."""
+    p = argparse.ArgumentParser(
+        description="Train BC model for hip+knee control using MSE loss"
+    )
+    p.add_argument(
+        "--steps", type=int, default=20_000,
+        help="Number of simulation steps to use for training"
+    )
+    p.add_argument(
+        "--hz", type=int, default=200,
+        help="Simulation frequency in Hz"
+    )
+    p.add_argument(
+        "--gpu", action="store_true",
+        help="Use GPU if available (sets JAX_PLATFORM_NAME=gpu)"
+    )
+    args = p.parse_args()
 
+    # Check for existing model with same step count
+    model_file = MODEL_BC_HIP_KNEE_ALTERNATIVES / f"hip_knee_alternatives_mse_{args.steps}steps.npz"
+    if model_file.exists():
+        print(f"[train] Found existing model with {args.steps} steps → {model_file}")
+        return
+
+    # configure JAX backend
     set_device(args.gpu)
-    import pickle; demos=pickle.load(open(DATA_DIR/"hip_knee_alternatives_demos.pkl","rb"))
-    obs,joint_labels = jnp.array(demos["obs"]), jnp.array(demos["labels"])
 
-    model=HipKneeController(input_size=obs.shape[1],hidden_size=128)
-    opt=optax.adam(args.lr)
-    model,loss_hist = train(model,opt,obs,joint_labels,args.epochs,args.batch)
-    plot_loss_curve(loss_hist)
-    pickle.dump(model, open(DATA_DIR/"controller_mse.pkl","wb"))
+    # load demonstration data
+    demo_file = DATA_BC_HIP_KNEE_ALTERNATIVES / f"hip_knee_alternatives_demos_{args.steps}steps.pkl"
+    if not demo_file.exists():
+        print(f"[train] No demo file found with {args.steps} steps → {demo_file}")
+        return
 
-if __name__=="__main__":
+    print(f"[train] loading demos from {demo_file}")
+    obs, labels = load_demo_data(demo_file)
+
+    # train the model
+    print(f"[train] training on {len(obs)} samples…")
+    model = train_model(obs, labels, loss_type="mse")
+
+    # save the trained model
+    save_model(model, model_file)
+    print(f"[train] saved → {model_file}")
+
+
+if __name__ == "__main__":
     main()

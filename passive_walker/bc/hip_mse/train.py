@@ -18,12 +18,13 @@ import jax
 import jax.numpy as jnp
 import equinox as eqx
 import optax
+from pathlib import Path
 
 from passive_walker.controllers.nn.hip_nn import HipController
 from passive_walker.bc.utils import plot_loss_curve
-from . import DATA_DIR, set_device
+from passive_walker.bc.hip_mse import DATA_BC_HIP_MSE, set_device
 
-def train_nn_controller(nn_controller, optimizer, demo_obs, demo_labels, num_epochs, batch_size, plot_loss=False):
+def train_nn_controller(nn_controller, optimizer, demo_obs, demo_labels, num_epochs, batch_size, plot_loss=True,steps=None):
     """Train the neural network controller using behavior cloning with MSE loss.
     
     Args:
@@ -34,7 +35,7 @@ def train_nn_controller(nn_controller, optimizer, demo_obs, demo_labels, num_epo
         num_epochs: Number of training epochs
         batch_size: Batch size for training
         plot_loss: Whether to plot the loss curve
-        
+        steps: Number of steps in demo data for file naming
     Returns:
         tuple: (trained neural network controller, loss history)
     """
@@ -70,7 +71,7 @@ def train_nn_controller(nn_controller, optimizer, demo_obs, demo_labels, num_epo
         print(f"[train] epoch {epoch:02d}  loss={loss:.4f}")
 
     if plot_loss:
-        plot_loss_curve(loss_history, save=str(DATA_DIR / 'loss_histories' / 'hip_mse_training_loss.png'))
+        plot_loss_curve(loss_history, save=str(DATA_BC_HIP_MSE / 'loss_histories' / f'hip_mse_training_loss_{steps}steps.png'))
 
     return nn_controller, loss_history
 
@@ -79,17 +80,22 @@ def main():
     p = argparse.ArgumentParser(description="Train NN hip controller (MSE BC)")
     p.add_argument("--epochs",      type=int,   default=100, help="Number of epochs")
     p.add_argument("--batch",       type=int,   default=32,  help="Batch size")
-    p.add_argument("--hidden-size", type=int,   default=64,  help="Hidden layer size")
+    p.add_argument("--hidden-size", type=int,   default=128,  help="Hidden layer size")
     p.add_argument("--lr",          type=float, default=1e-4,help="Learning rate")
     p.add_argument("--gpu",         action="store_true",    help="Use GPU if available")
     p.add_argument("--plot",        action="store_true",    help="Plot training loss curve")
+    p.add_argument("--steps",       type=int,   default=20_000, help="Number of steps in demo data")
     args = p.parse_args()
 
     # Set JAX device BEFORE any other imports
     set_device(args.gpu)
 
-    # Load collected demonstrations
-    demos = pickle.load(open(DATA_DIR / "hip_mse_demos.pkl", "rb"))
+    # Load collected demonstrations with step count in filename
+    demo_file = DATA_BC_HIP_MSE / f"hip_mse_demos_{args.steps}steps.pkl"
+    if not demo_file.exists():
+        raise FileNotFoundError(f"No demo file found for {args.steps} steps. Please run collect.py first.")
+    
+    demos = pickle.load(open(demo_file, "rb"))
     demo_obs    = jnp.array(demos["obs"])
     demo_labels = jnp.array(demos["labels"])
 
@@ -100,24 +106,25 @@ def main():
     optimizer     = optax.adam(args.lr)
 
     # Train
-    print(f"[train] Starting BC for {demo_obs.shape[0]} samples …")
+    print(f"[train] Starting BC for {demo_obs.shape[0]} samples from {args.steps} steps demo…")
     nn_controller, loss_history = train_nn_controller(
         nn_controller, optimizer,
         demo_obs, demo_labels,
         num_epochs=args.epochs,
         batch_size=args.batch,
         plot_loss=args.plot,
+        steps=args.steps,
     )
 
-    # Save final weights
-    out_file = DATA_DIR / "hip_mse_controller.pkl"
+    # Save final weights with step count in filename
+    out_file = DATA_BC_HIP_MSE / f"hip_mse_controller_{args.steps}steps.pkl"
     with open(out_file, "wb") as f:
         pickle.dump(nn_controller, f)
     print(f"[train] Saved trained controller → {out_file}")
 
-    # Save loss history
+    # Save loss history with step count in filename
     if args.plot:
-        loss_file = DATA_DIR / "training_loss_history.pkl"
+        loss_file = DATA_BC_HIP_MSE / f"training_loss_history_{args.steps}steps.pkl"
         with open(loss_file, "wb") as f:
             pickle.dump(loss_history, f)
         print(f"[train] Saved loss history → {loss_file}")

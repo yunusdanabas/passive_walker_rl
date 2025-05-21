@@ -9,11 +9,11 @@ a Behavioral Cloning (BC) policy. It includes:
 
 Usage:
     python -m passive_walker.ppo.bc_init.train \
-        --bc-model DATA/bc/hip_knee_mse_controller.pkl \
+        --bc-model hip_knee_mse_controller_20000steps.pkl \
         [--iters I] [--rollout R] [--epochs E] [--batch B] \
         [--gamma G] [--lam L] [--clip C] [--sigma S] \
         [--lr-policy LP] [--lr-critic LC] [--bc-coef BC] [--anneal AN] \
-        [--seed SEED] [--gpu]
+        [--hz HZ] [--seed SEED] [--gpu]
 """
 
 import argparse, pickle
@@ -24,7 +24,7 @@ import optax
 from mujoco.glfw import glfw
 
 from passive_walker.ppo.bc_init.utils import initialize_policy, compute_advantages
-from . import set_device, DATA_DIR, XML_PATH
+from passive_walker.ppo.bc_init import set_device, DATA_PPO_BC, XML_PATH, BC_DATA
 
 class Critic(eqx.Module):
     """
@@ -41,8 +41,8 @@ class Critic(eqx.Module):
     l2: eqx.nn.Linear
     l3: eqx.nn.Linear
     
-    def __init__(self, obs_dim, hidden=64, key=None):
-        if key is None: key = jax.random.PRNGKey(0)
+    def __init__(self, obs_dim, hidden=512, key=None):
+        if key is None: key = jax.random.PRNGKey(42)
         k1, k2, k3 = jax.random.split(key, 3)
         self.l1 = eqx.nn.Linear(obs_dim, hidden,  key=k1)
         self.l2 = eqx.nn.Linear(hidden,  hidden,  key=k2)
@@ -147,19 +147,20 @@ def main():
     # Parse command line arguments
     p = argparse.ArgumentParser()
     p.add_argument("--bc-model", type=str, required=True)
-    p.add_argument("--iters",    type=int,   default=200)
-    p.add_argument("--rollout",  type=int,   default=2048)
-    p.add_argument("--epochs",   type=int,   default=20)
+    p.add_argument("--iters",    type=int,   default=500)
+    p.add_argument("--rollout",  type=int,   default=8192)
+    p.add_argument("--epochs",   type=int,   default=100)
     p.add_argument("--batch",    type=int,   default=256)
     p.add_argument("--gamma",    type=float, default=0.99)
     p.add_argument("--lam",      type=float, default=0.95)
     p.add_argument("--clip",     type=float, default=0.2)
     p.add_argument("--sigma",    type=float, default=0.1)
-    p.add_argument("--lr-policy",type=float, default=3e-4)
+    p.add_argument("--lr-policy",type=float, default=1e-4)
     p.add_argument("--lr-critic",type=float, default=1e-4)
-    p.add_argument("--bc-coef",  type=float, default=1.0)
-    p.add_argument("--anneal",   type=int,   default=200_000)
+    p.add_argument("--bc-coef",  type=float, default=3.0)
+    p.add_argument("--anneal",   type=int,   default=100_000)
     p.add_argument("--seed",     type=int,   default=42)
+    p.add_argument("--hz",       type=int,   default=1000)
     p.add_argument("--gpu",      action="store_true")
     args = p.parse_args()
 
@@ -169,11 +170,14 @@ def main():
     # Define global optimizers
     global policy_optimizer, critic_optimizer
     
+    # Construct BC model path
+    BC_MODEL = BC_DATA / "hip_knee_mse" / args.bc_model
+    
     # Initialize environment and BC policy
     env, get_scaled, get_env_act, policy = initialize_policy(
-        model_path=args.bc_model,
+        model_path=str(BC_MODEL),
         xml_path=str(XML_PATH),
-        simend=args.rollout/60.0,
+        simend=args.rollout/args.hz,
         sigma=args.sigma,
         use_gui=False
     )
@@ -257,14 +261,14 @@ def main():
     env.close()
     
     # Save trained policy and critic
-    out_path = DATA_DIR / "trained_policy_with_critic.pkl"
+    out_path = DATA_PPO_BC / f"trained_policy_with_critic_{args.hz}hz.pkl"
     with open(out_path, "wb") as f:
         pickle.dump((policy, critic), f)
     print(f"Saved policy+critic → {out_path}")
 
     # Save training rewards log
     from passive_walker.ppo.bc_init.utils import save_pickle
-    log_path = DATA_DIR / "ppo_training_log.pkl"
+    log_path = DATA_PPO_BC / f"ppo_training_log_{args.hz}hz.pkl"
     save_pickle({"rewards": rewards_log}, log_path)
     print(f"Saved reward log → {log_path}")
 

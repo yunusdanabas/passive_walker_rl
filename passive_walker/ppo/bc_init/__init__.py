@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 # Root directory of the project
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 # Path to your MuJoCo XML
 XML_PATH = ROOT / "passiveWalker_model.xml"

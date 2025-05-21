@@ -12,19 +12,26 @@ import argparse
 import jax.numpy as jnp
 import numpy as np
 
-from . import DATA_DIR, XML_PATH, set_device
-from .utils import initialize_policy, collect_trajectories, save_pickle
+from passive_walker.ppo.scratch import DATA_PPO_SCRATCH, XML_PATH, set_device
+from passive_walker.ppo.scratch.utils import initialize_policy, collect_trajectories, save_pickle
 from passive_walker.envs.mujoco_env import PassiveWalkerEnv
+
+# Default parameters
+DEFAULT_STEPS = 4096
+DEFAULT_SIGMA = 0.1
+DEFAULT_HZ = 200
 
 def main():
     # Parse command line arguments
     p = argparse.ArgumentParser(description="Collect on‐policy rollouts")
-    p.add_argument("--steps", type=int, default=4096,
-                  help="Env steps per rollout")
-    p.add_argument("--sigma", type=float, default=0.1,
-                  help="Policy std in scaled space")
+    p.add_argument("--steps", type=int, default=DEFAULT_STEPS,
+                  help=f"Env steps per rollout (default: {DEFAULT_STEPS})")
+    p.add_argument("--sigma", type=float, default=DEFAULT_SIGMA,
+                  help=f"Policy std in scaled space (default: {DEFAULT_SIGMA})")
     p.add_argument("--output", type=str, default="trajectories.pkl",
                   help="Output filename")
+    p.add_argument("--hz", type=int, default=DEFAULT_HZ,
+                  help=f"Simulation frequency (Hz) (default: {DEFAULT_HZ})")
     p.add_argument("--gpu", action="store_true",
                   help="Use GPU acceleration")
     args = p.parse_args()
@@ -42,7 +49,7 @@ def main():
         obs_dim=obs_dim,
         act_dim=act_dim,
         xml_path=str(XML_PATH),
-        simend=args.steps/60.0,  # Convert steps to simulation time
+        simend=args.steps/args.hz,
         sigma=args.sigma,
         use_gui=False
     )
@@ -57,7 +64,7 @@ def main():
     )
 
     # Save collected trajectories to disk
-    out_file = DATA_DIR / args.output
+    out_file = DATA_PPO_SCRATCH / args.output
     save_pickle(traj, out_file)
     print(f"[collect] saved → {out_file}")
 

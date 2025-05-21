@@ -9,7 +9,7 @@ import gym
 from gym import spaces
 import mujoco
 from mujoco.glfw import glfw
-from scipy.spatial.transform import Rotation as R
+import jax.numpy as jnp
 from passive_walker.constants import XML_PATH
 
 
@@ -25,20 +25,31 @@ KNEE_STANCE     = 0.0    # Target knee angle during stance phase (radians)
 KNEE_RETRACT    = -0.25  # Target knee angle during retraction phase (radians)
 
 
-def quat2euler(quat):
+# ---------- Helper:  convert quaternion to Euler angles ----------------------------------------------
+def quat2euler(q):
     """
-    Convert quaternion to Euler angles.
-    
-    Args:
-        quat (np.ndarray): Quaternion in MuJoCo format [w, x, y, z]
-    
-    Returns:
-        np.ndarray: Euler angles in [x, y, z] order (radians)
+    MuJoCo quaternion [w, x, y, z] → roll-pitch-yaw (rad).
+    Safe for both np and jnp arrays.
     """
-    # MuJoCo: [w, x, y, z] --> SciPy expects [x, y, z, w]
-    _quat = np.concatenate([quat[1:], quat[:1]])
-    r = R.from_quat(_quat)
-    return r.as_euler('xyz', degrees=False)
+    w, x, y, z = q
+    xp = jnp if isinstance(q, jnp.ndarray) else np   # backend picker
+
+    # roll (x-axis)
+    t0 = 2 * (w * x + y * z)
+    t1 = 1 - 2 * (x * x + y * y)
+    roll = xp.arctan2(t0, t1)
+
+    # pitch (y-axis)
+    t2 = 2 * (w * y - z * x)
+    t2 = xp.clip(t2, -1.0, 1.0)
+    pitch = xp.arcsin(t2)
+
+    # yaw (z-axis)
+    t3 = 2 * (w * z + x * y)
+    t4 = 1 - 2 * (y * y + z * z)
+    yaw = xp.arctan2(t3, t4)
+
+    return roll, pitch, yaw
 
 class PassiveWalkerEnv(gym.Env):
     """

@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from passive_walker.envs.mujoco_env import PassiveWalkerEnv
 from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
-from . import DATA_DIR
+from passive_walker.ppo.bc_init import DATA_PPO_BC
 
 # — serialization —
 
@@ -62,7 +62,7 @@ def initialize_policy(
     Initialize environment and policy from a Behavioral Cloning checkpoint.
     
     Args:
-        model_path: Path to the BC policy pickle file
+        model_path: Path to the BC policy pickle file (either controller or demo dataset)
         xml_path: Path to the MuJoCo XML model file
         simend: Simulation end time
         sigma: Standard deviation for exploration
@@ -74,10 +74,29 @@ def initialize_policy(
       get_env_action: Function mapping obs to environment action space
       bc_policy_model: The loaded BC policy model
     """
+    # Load the BC model
     loaded_data = load_pickle(model_path)
-    # If loaded_data is a tuple, assume first element is the model
-    bc_policy = loaded_data[0] if isinstance(loaded_data, tuple) else loaded_data
     
+    # Handle different possible data structures
+    if isinstance(loaded_data, tuple):
+        # If it's a tuple (model, loss_history), take just the model
+        bc_policy = loaded_data[0]
+    elif isinstance(loaded_data, dict):
+        if "model" in loaded_data:
+            # If it's a controller file with a model key
+            bc_policy = loaded_data["model"]
+        elif "obs" in loaded_data and "labels" in loaded_data:
+            # If it's a demo dataset, we need to train a model first
+            from passive_walker.bc.hip_knee_mse import train_model
+            print("[initialize_policy] Training model from demo dataset...")
+            bc_policy, _ = train_model(loaded_data["obs"], loaded_data["labels"])
+        else:
+            raise ValueError(f"Loaded data is a dictionary but doesn't contain expected keys. Found: {loaded_data.keys()}")
+    else:
+        # Otherwise assume it's the model directly
+        bc_policy = loaded_data
+    
+    # Create environment
     env = PassiveWalkerEnv(
         xml_path=xml_path,
         simend=simend,
@@ -86,10 +105,13 @@ def initialize_policy(
         use_gui=use_gui,
     )
 
+    # Define action functions
     def get_scaled(obs_jnp: jnp.ndarray) -> jnp.ndarray:
+        """Get scaled actions from policy."""
         return bc_policy(obs_jnp)
 
     def get_env(obs_jnp: jnp.ndarray) -> np.ndarray:
+        """Get environment actions from policy."""
         return np.array(bc_policy(obs_jnp), dtype=np.float32)
 
     return env, get_scaled, get_env, bc_policy
@@ -207,7 +229,7 @@ def policy_log_prob(
 
 # — Plotting utilities —
 
-def plot_training_rewards(rewards, save_path=DATA_DIR / "ppo_training_curve.png", title="Average Reward per PPO Iteration", print_stats=True):
+def plot_training_rewards(rewards, save_path=DATA_PPO_BC / "ppo_training_curve.png", title="Average Reward per PPO Iteration", print_stats=True):
     """
     Plot average reward per PPO iteration.
     
@@ -246,13 +268,13 @@ def plot_training_rewards(rewards, save_path=DATA_DIR / "ppo_training_curve.png"
             percent_improvement = (improvement / abs(rewards[0] + 1e-10)) * 100  # Avoid division by zero
             print(f"Improvement: {improvement:.2f} ({percent_improvement:.1f}%)")
 
-def analyze_training_log(log_path=DATA_DIR / "ppo_training_log.pkl", save_path=DATA_DIR / "ppo_training_curve.png", title="Average Reward per PPO Iteration"):
+def analyze_training_log(log_path=DATA_PPO_BC / "ppo_training_log.pkl", save_path=DATA_PPO_BC / "ppo_training_curve.png", title="Average Reward per PPO Iteration"):
     """
     Load and analyze a training log, plotting the rewards.
     
     Args:
-        log_path: Path to the training log pickle file (default: DATA_DIR/ppo_training_log.pkl)
-        save_path: Path to save the plot (default: DATA_DIR/ppo_training_curve.png) 
+        log_path: Path to the training log pickle file (default: DATA_PPO_BC/ppo_training_log.pkl)
+        save_path: Path to save the plot (default: DATA_PPO_BC/ppo_training_curve.png) 
         title: Title for the plot
         
     Returns:

@@ -18,7 +18,7 @@ logger.setLevel(logging.INFO)
 
 @dataclass
 class WalkerCfg:
-    ctrl_hz: int = 60
+    ctrl_hz: int = 200
     upright_pitch: float = 0.20
     fall_z_min: float = 0.15
     fall_pitch_max: float = 1.0
@@ -28,7 +28,6 @@ class WalkerCfg:
     ramp_deg_min: float = 10.0
     friction: tuple[float, float] = (0.8, 1.0)
     mass_jitter: float = 0.05
-    randomize_physics: bool = True  # Flag to enable/disable physics randomization
 
 # ---------- Constants --------------------------------------------------
 # Reward coefficients
@@ -192,7 +191,8 @@ class PassiveWalkerEnv(gym.Env):
                  use_nn_for_knees=False,
                  use_gui=True, 
                  cfg: WalkerCfg = WalkerCfg(),
-                 rng_seed: int = None):
+                 rng_seed: int = None,
+                 randomize_physics: bool = True):
         
         super().__init__()
         self.simend = simend
@@ -201,6 +201,7 @@ class PassiveWalkerEnv(gym.Env):
         self.use_gui = use_gui
         self.cfg = cfg
         self.ctrl_hz = cfg.ctrl_hz
+        self.randomize_physics = randomize_physics
         # Use time-based seed if none provided
         if rng_seed is None:
             rng_seed = int(np.random.randint(2**31))
@@ -296,7 +297,7 @@ class PassiveWalkerEnv(gym.Env):
         mujoco.mj_resetData(self.model, self.data)
 
         # --- domain randomisation ---------------------------------------
-        if self.cfg.randomize_physics:
+        if self.randomize_physics:
             self.rng, sub = jax.random.split(self.rng)
             _randomise_physics(self, sub)
 
@@ -416,6 +417,9 @@ class PassiveWalkerEnv(gym.Env):
         early termination on fall.
         """
         sim_steps = int((1.0 / self.ctrl_hz) / self.model.opt.timestep)
+        # print(f"sim_steps: {sim_steps}")
+        # print(f"self.ctrl_hz: {self.ctrl_hz}")
+        # print(f"self.model.opt.timestep: {self.model.opt.timestep}")
 
         for _ in range(sim_steps):
             mujoco.mj_step(self.model, self.data)
@@ -502,7 +506,6 @@ if __name__ == "__main__":
         ramp_deg_max=11.5,
         friction=(0.8, 1.0),
         mass_jitter=0.05,
-        randomize_physics=True  # Set to False to disable physics randomization
     )
     
     # Test demo mode (FSM for both hip and knees) with GUI.
@@ -514,7 +517,8 @@ if __name__ == "__main__":
         use_nn_for_knees=False, 
         use_gui=True, 
         cfg=cfg,
-        rng_seed=0
+        rng_seed=0,
+        randomize_physics=True
     )
     
     # Enable debug logging if desired

@@ -20,6 +20,7 @@ import os
 import pickle
 import numpy as np
 from mujoco.glfw import glfw
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -30,7 +31,8 @@ from passive_walker.envs.mujoco_fsm_env import PassiveWalkerEnv
 from passive_walker.controllers.nn.hip_nn import HipController
 from passive_walker.bc.hip_mse.train import train_nn_controller
 from passive_walker.bc.hip_mse.collect import collect_demo_data
-from . import DATA_DIR, XML_PATH, set_device
+from passive_walker.bc.hip_mse import DATA_BC_HIP_MSE, XML_PATH, set_device
+from passive_walker.utils.io import save_pickle
 
 def main():
     """Run the complete behavior cloning pipeline."""
@@ -45,22 +47,39 @@ def main():
     p.add_argument("--seed",          type=int,   default=42,     help="PRNG seed")
     p.add_argument("--gpu",           action="store_true",        help="Use GPU if available")
     p.add_argument("--plot",          action="store_true",        help="Plot training loss curve")
+    p.add_argument("--hz",            type=int,   default=200,    help="Simulation frequency (Hz)")
     args = p.parse_args()
 
     # 0. Configure device
     set_device(args.gpu)
 
-    # 1. Collect demonstration data
-    print("1) Collecting FSM demos…")
-    env_demo = PassiveWalkerEnv(
-        xml_path=str(XML_PATH),
-        simend=30,
-        use_nn_for_hip=False,
-        use_gui=False,
-    )
-    demo_obs, demo_labels = collect_demo_data(env_demo, num_steps=args.steps)
-    env_demo.close()
-    print(f"   Collected obs={demo_obs.shape}, labels={demo_labels.shape}")
+    # 1. Check for existing demo data or collect new data
+    demo_file = DATA_BC_HIP_MSE / f"hip_mse_demos_{args.steps}steps.pkl"
+    if demo_file.exists():
+        print(f"1) Loading existing demo data from {demo_file}…")
+        with open(demo_file, "rb") as f:
+            demos = pickle.load(f)
+        demo_obs = jnp.array(demos["obs"])
+        demo_labels = jnp.array(demos["labels"])
+    else:
+        print("1) Collecting FSM demos…")
+        env_demo = PassiveWalkerEnv(
+            xml_path=str(XML_PATH),
+            simend=args.steps / float(args.hz),
+            use_nn_for_hip=False,
+            use_gui=False,
+        )
+        demo_obs, demo_labels = collect_demo_data(env_demo, num_steps=args.steps)
+        env_demo.close()
+        
+        # Save the collected demos
+        save_pickle(
+            {"obs": np.array(demo_obs, dtype=np.float32),
+             "labels": np.array(demo_labels, dtype=np.float32)},
+            demo_file
+        )
+    
+    print(f"   Using obs={demo_obs.shape}, labels={demo_labels.shape}")
 
     # 2. Instantiate & train NN controller
     print("2) Training NN controller via BC…")
@@ -85,13 +104,13 @@ def main():
     )
 
     # 3. Save the trained model and loss history
-    out_file = DATA_DIR / "hip_mse_controller.pkl"
+    out_file = DATA_BC_HIP_MSE / f"hip_mse_controller_{args.steps}steps.pkl"
     with open(out_file, "wb") as f:
         pickle.dump(nn_controller, f)
     print(f"3) Saved trained controller → {out_file}")
 
     if args.plot:
-        loss_file = DATA_DIR / "training_loss_history.pkl"
+        loss_file = DATA_BC_HIP_MSE / f"training_loss_history_{args.steps}steps.pkl"
         with open(loss_file, "wb") as f:
             pickle.dump(loss_history, f)
         print(f"   Saved loss history → {loss_file}")

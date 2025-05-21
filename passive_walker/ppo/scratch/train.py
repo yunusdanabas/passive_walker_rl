@@ -15,8 +15,8 @@ import equinox as eqx
 import optax
 import pickle
 
-from . import XML_PATH, DATA_DIR, set_device
-from .utils import (
+from passive_walker.ppo.scratch import XML_PATH, DATA_PPO_SCRATCH, set_device
+from passive_walker.ppo.scratch.utils import (
     initialize_policy,
     collect_trajectories,
     compute_advantages,
@@ -31,7 +31,7 @@ class Critic(eqx.Module):
     """Value function estimator network."""
     layers: list
     
-    def __init__(self, in_size, hidden=64, key=None):
+    def __init__(self, in_size, hidden=512, key=None):
         keys = jax.random.split(key, 3)
         self.layers = [
             eqx.nn.Linear(in_size, hidden, key=keys[0]),
@@ -49,17 +49,18 @@ class Critic(eqx.Module):
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Train PPO from scratch")
-    parser.add_argument("--iterations", type=int, default=100, help="Number of PPO iterations")
-    parser.add_argument("--rollout-steps", type=int, default=2048, help="Steps to collect per iteration")
+    parser.add_argument("--iterations", type=int, default=500, help="Number of PPO iterations")
+    parser.add_argument("--rollout-steps", type=int, default=8192, help="Steps to collect per iteration")
     parser.add_argument("--ppo-epochs", type=int, default=10, help="Epochs per PPO update")
     parser.add_argument("--batch-size", type=int, default=256, help="Minibatch size")
     parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
     parser.add_argument("--lam", type=float, default=0.95, help="GAE lambda")
     parser.add_argument("--clip-eps", type=float, default=0.2, help="PPO clipping epsilon")
     parser.add_argument("--sigma", type=float, default=0.1, help="Policy std dev")
-    parser.add_argument("--policy-lr", type=float, default=3e-4, help="Policy learning rate")
+    parser.add_argument("--policy-lr", type=float, default=1e-4, help="Policy learning rate")
     parser.add_argument("--critic-lr", type=float, default=1e-3, help="Critic learning rate")
     parser.add_argument("--gpu", action="store_true", help="Use GPU acceleration")
+    parser.add_argument("--hz", type=int, default=1000, help="Simulation frequency (Hz)")
     args = parser.parse_args()
 
     # Set device (CPU/GPU)
@@ -81,7 +82,7 @@ def main():
     
     # Initialize critic
     key = jax.random.PRNGKey(0)
-    critic = Critic(obs_dim, hidden=64, key=key)
+    critic = Critic(obs_dim, hidden=512, key=key)
     
     # Initialize optimizers
     policy_opt = optax.adam(args.policy_lr)
@@ -160,19 +161,20 @@ def main():
         print(f"[PPO scratch] iter {it}/{args.iterations}  avg_rew={avg_reward:.2f}")
 
     # Save final model/critic/log
-    output_path = DATA_DIR / "trained_policy_with_critic.pkl"
+    output_path = DATA_PPO_SCRATCH / f"trained_policy_with_critic_{args.hz}hz.pkl"
     with open(output_path, "wb") as f:
         pickle.dump((policy, critic), f)
     print(f"[PPO scratch] saved policy → {output_path}")
     
     # Save training log
     log = {"rewards": reward_history}
-    log_path = DATA_DIR / "ppo_training_log.pkl"
+    log_path = DATA_PPO_SCRATCH / f"ppo_training_log_{args.hz}hz.pkl"
     save_pickle(log, log_path)
     print(f"[PPO scratch] saved log → {log_path}")
     
     # Plot training curve
-    plot_training_rewards(reward_history)
+    plot_training_rewards(reward_history, 
+                         save_path=DATA_PPO_SCRATCH / f"ppo_training_curve_{args.hz}hz.png")
 
 if __name__ == "__main__":
     main()

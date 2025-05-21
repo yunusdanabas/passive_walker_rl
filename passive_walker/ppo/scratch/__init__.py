@@ -1,17 +1,26 @@
 """
-This module handles configuration for Behavior Cloning (BC) seeded PPO algorithms.
+This module handles configuration for PPO algorithms from scratch.
 It defines paths for data storage and model files, and provides device selection functionality.
 """
 
 import os
 from pathlib import Path
 
-# Where to read/write scratch PPO data
-DATA_DIR = Path(__file__).resolve().parents[3] / "data" / "ppo" / "scratch"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+# Root directory of the project
+ROOT = Path(__file__).resolve().parents[3]
 
 # Path to your MuJoCo XML
-XML_PATH = Path(__file__).resolve().parents[3] / "passiveWalker_model.xml"
+XML_PATH = ROOT / "passiveWalker_model.xml"
+
+# Data directories
+DATA_DIR = ROOT / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+DATA_PPO_SCRATCH = ROOT / "data" / "ppo" / "scratch"
+DATA_PPO_SCRATCH.mkdir(parents=True, exist_ok=True)
+
+RESULTS_PPO_SCRATCH = ROOT / "results" / "ppo" / "scratch"
+RESULTS_PPO_SCRATCH.mkdir(parents=True, exist_ok=True)
 
 def set_device(use_gpu: bool):
     """
