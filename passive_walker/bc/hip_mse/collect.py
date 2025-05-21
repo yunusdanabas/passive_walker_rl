@@ -23,7 +23,7 @@ import glob
 
 from passive_walker.envs.mujoco_env import PassiveWalkerEnv
 from passive_walker.utils.io import save_pickle, load_pickle
-from passive_walker.bc.hip_mse import DATA_BC_HIP_MSE, XML_PATH, set_device, save_pickle
+from passive_walker.bc.hip_mse import DATA_BC_HIP_MSE, XML_PATH, set_device
 
 
 def collect_demo_data(env: PassiveWalkerEnv, num_steps: int = 1000):

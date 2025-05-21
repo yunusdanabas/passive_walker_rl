@@ -41,7 +41,7 @@ def main():
     p.add_argument("--steps",         type=int,   default=20_000, help="Demo steps")
     p.add_argument("--epochs",        type=int,   default=50,    help="Training epochs")
     p.add_argument("--batch",         type=int,   default=32,     help="Batch size")
-    p.add_argument("--hidden-size",   type=int,   default=128,    help="Hidden layer size")
+    p.add_argument("--hidden-size",   type=int,   default=256,    help="Hidden layer size")
     p.add_argument("--lr",            type=float, default=1e-4,   help="Learning rate")
     p.add_argument("--sim-duration",  type=float, default=30.0,   help="Test sim duration (s)")
     p.add_argument("--seed",          type=int,   default=42,     help="PRNG seed")

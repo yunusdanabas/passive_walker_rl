@@ -41,13 +41,13 @@ def main():
     p.add_argument("--steps",         type=int,   default=20_000, help="Demo steps")
     p.add_argument("--epochs",        type=int,   default=50,    help="Training epochs")
     p.add_argument("--batch",         type=int,   default=32,     help="Batch size")
-    p.add_argument("--hidden-size",   type=int,   default=128,    help="Hidden layer size")
+    p.add_argument("--hidden-size",   type=int,   default=256,    help="Hidden layer size")
     p.add_argument("--lr",            type=float, default=1e-4,   help="Learning rate")
     p.add_argument("--sim-duration",  type=float, default=30.0,   help="Test sim duration (s)")
     p.add_argument("--seed",          type=int,   default=42,     help="PRNG seed")
     p.add_argument("--gpu",           action="store_true",        help="Use GPU if available")
     p.add_argument("--plot",          action="store_true",        help="Plot training loss curve")
-    p.add_argument("--hz",            type=int,   default=200,    help="Simulation frequency (Hz)")
+    p.add_argument("--hz",            type=int,   default=500,    help="Simulation frequency (Hz)")
     args = p.parse_args()
 
     # 0. Configure device
@@ -67,6 +67,7 @@ def main():
             xml_path=str(XML_PATH),
             simend=args.steps / float(args.hz),
             use_nn_for_hip=False,
+            use_nn_for_knees=False,
             use_gui=False,
         )
         demo_obs, demo_labels = collect_demo_data(env_demo, num_steps=args.steps)

@@ -30,3 +30,36 @@ from passive_walker.constants import (
 
 DATA_BC_HIP_MSE = DATA_BC / "hip_mse"
 DATA_BC_HIP_MSE.mkdir(parents=True, exist_ok=True)
+
+from pathlib import Path
+import jax
+import equinox as eqx
+from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
+
+def save_model(model, model_file: Path):
+    """
+    Save a trained model to a file.
+
+    Args:
+        model: Trained model to save
+        model_file: Path where to save the model
+    """
+    eqx.tree_serialise_leaves(model_file, model)
+
+
+def load_model(path: Path,hidden_size=128,input_size=11):
+    """
+    Load model parameters from file.
+    
+    Args:
+        path: Path to the saved model
+        
+    Returns:
+        Loaded model
+    """
+    model = HipKneeController(
+        input_size=input_size,
+        hidden_size=hidden_size,
+        key=jax.random.PRNGKey(42)
+    )
+    return eqx.tree_deserialise_leaves(path, model)

@@ -41,7 +41,7 @@ class Critic(eqx.Module):
     l2: eqx.nn.Linear
     l3: eqx.nn.Linear
     
-    def __init__(self, obs_dim, hidden=512, key=None):
+    def __init__(self, obs_dim, hidden=128, key=None):
         if key is None: key = jax.random.PRNGKey(42)
         k1, k2, k3 = jax.random.split(key, 3)
         self.l1 = eqx.nn.Linear(obs_dim, hidden,  key=k1)
