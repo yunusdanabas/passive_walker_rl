@@ -45,7 +45,7 @@ def main():
     args = p.parse_args()
 
     # Check for existing model with same step count
-    model_file = MODEL_BC_HIP_KNEE_ALTERNATIVES / f"hip_knee_alternatives_l1_{args.steps}steps.npz"
+    model_file = MODEL_BC_HIP_KNEE_ALTERNATIVES / f"hip_knee_alternatives_l1_{args.steps}steps.eqx"
     if model_file.exists():
         print(f"[train] Found existing model with {args.steps} steps → {model_file}")
         return

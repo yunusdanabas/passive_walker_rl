@@ -22,7 +22,7 @@ import equinox as eqx
 
 from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
 from passive_walker.bc.utils import plot_loss_curve
-from passive_walker.bc.hip_knee_mse import DATA_BC_HIP_KNEE_MSE, set_device
+from passive_walker.bc.hip_knee_mse import DATA_BC_HIP_KNEE_MSE, set_device, save_model, load_model
 
 
 def train_nn_controller(model, optimizer, obs, labels, epochs, batch, plot_loss=True, steps=None):
@@ -107,9 +107,8 @@ def main():
     )
 
     # Save final weights with step count in filename
-    out_file = DATA_BC_HIP_KNEE_MSE / f"hip_knee_mse_controller_{args.steps}steps.pkl"
-    with open(out_file, "wb") as f:
-        pickle.dump(model, f)
+    out_file = DATA_BC_HIP_KNEE_MSE / f"hip_knee_mse_controller_{args.steps}steps.eqx"
+    save_model(model, out_file)
     print(f"[train] saved → {out_file}")
 
     # Save loss history with step count in filename

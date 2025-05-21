@@ -142,7 +142,7 @@ def load_or_train_model(name: str, obs, labels, steps: int, loss_type: str):
     Returns:
         Tuple of (model, loss_history, training_time)
     """
-    model_file = DATA_BC_HIP_KNEE_ALTERNATIVES / f"hip_knee_alternatives_{loss_type}_{steps}steps.npz"
+    model_file = DATA_BC_HIP_KNEE_ALTERNATIVES / f"hip_knee_alternatives_{loss_type}_{steps}steps.eqx"
     history_file = DATA_BC_HIP_KNEE_ALTERNATIVES / f"hip_knee_alternatives_{loss_type}_{steps}steps_history.pkl"
     
     if model_file.exists() and history_file.exists():

@@ -21,7 +21,7 @@ import optax
 
 from passive_walker.controllers.nn.knee_nn import KneeController
 from passive_walker.bc.utils import plot_loss_curve
-from passive_walker.bc.knee_mse import DATA_BC_KNEE_MSE, set_device
+from passive_walker.bc.knee_mse import DATA_BC_KNEE_MSE, set_device, save_model, load_model
 
 def train_nn_controller(nn_controller, optimizer, demo_obs, demo_labels, num_epochs, batch_size, plot_loss=True,steps=None):
     """Train the neural network controller using behavior cloning with MSE loss.
@@ -117,8 +117,7 @@ def main():
 
     # Save final weights with step count in filename
     out_file = DATA_BC_KNEE_MSE / f"knee_mse_controller_{args.steps}steps.pkl"
-    with open(out_file, "wb") as f:
-        pickle.dump(nn_controller, f)
+    save_model(nn_controller, out_file)
     print(f"[train] Saved trained controller → {out_file}")
 
     # Save loss history with step count in filename

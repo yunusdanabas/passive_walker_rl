@@ -22,7 +22,7 @@ from pathlib import Path
 
 from passive_walker.controllers.nn.hip_nn import HipController
 from passive_walker.bc.utils import plot_loss_curve
-from passive_walker.bc.hip_mse import DATA_BC_HIP_MSE, set_device
+from passive_walker.bc.hip_mse import DATA_BC_HIP_MSE, set_device, save_model, load_model
 
 def train_nn_controller(nn_controller, optimizer, demo_obs, demo_labels, num_epochs, batch_size, plot_loss=True,steps=None):
     """Train the neural network controller using behavior cloning with MSE loss.
@@ -117,9 +117,8 @@ def main():
     )
 
     # Save final weights with step count in filename
-    out_file = DATA_BC_HIP_MSE / f"hip_mse_controller_{args.steps}steps.pkl"
-    with open(out_file, "wb") as f:
-        pickle.dump(nn_controller, f)
+    out_file = DATA_BC_HIP_MSE / f"hip_mse_controller_{args.steps}steps.eqx"
+    save_model(nn_controller, out_file)
     print(f"[train] Saved trained controller → {out_file}")
 
     # Save loss history with step count in filename

@@ -30,7 +30,7 @@ from passive_walker.envs.mujoco_fsm_env import PassiveWalkerEnv
 from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
 from passive_walker.bc.hip_knee_mse.collect import collect_demo_data
 from passive_walker.bc.hip_knee_mse.train import train_nn_controller
-from passive_walker.bc.hip_knee_mse import DATA_BC_HIP_KNEE_MSE, XML_PATH, set_device
+from passive_walker.bc.hip_knee_mse import DATA_BC_HIP_KNEE_MSE, XML_PATH, set_device, save_model
 from passive_walker.utils.io import save_pickle
 
 
@@ -97,9 +97,8 @@ def main():
     )
 
     # 3. Save the trained model and loss history
-    out_file = DATA_BC_HIP_KNEE_MSE / f"hip_knee_mse_controller_{args.steps}steps.pkl"
-    with open(out_file, "wb") as f:
-        pickle.dump(model, f)
+    out_file = DATA_BC_HIP_KNEE_MSE / f"hip_knee_mse_controller_{args.steps}steps.eqx"
+    save_model(model, out_file)
     print(f"3) Saved trained controller → {out_file}")
 
     if args.plot:

@@ -144,7 +144,7 @@ def save_model(model, model_file: Path):
     eqx.tree_serialise_leaves(model_file, model)
 
 
-def load_model(path: Path):
+def load_model(path: Path,hidden_size=128,input_size=11):
     """
     Load model parameters from file.
     
@@ -155,8 +155,8 @@ def load_model(path: Path):
         Loaded model
     """
     model = HipKneeController(
-        input_size=11,
-        hidden_size=128,
+        input_size=input_size,
+        hidden_size=hidden_size,
         key=jax.random.PRNGKey(42)
     )
     return eqx.tree_deserialise_leaves(path, model)
