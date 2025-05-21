@@ -1,8 +1,39 @@
-import jax
-import jax.numpy as jnp
-import brax
-from brax.envs.base    import PipelineEnv, State
+"""Brax-native passive walker environment.
 
+The class is a *thin* wrapper around :class:`brax.envs.base.PipelineEnv`
+so that we stay fully compatible with **brax.training** PPO/ES/SAC
+implementations.
+
+✔  PD-controlled hip + knees  
+✔  `(obs, act)` sizes identical to the MuJoCo version  
+✔  JIT-able and vmap-friendly out-of-the-box
+"""
+
+from __future__ import annotations
+
+from functools import cached_property
+from pathlib import Path
+import pickle, gzip
+
+import brax
+from brax.envs.base import PipelineEnv, State
+from brax.math import quat_to_euler
+from brax.v1.physics.base import QP
+import jax, jax.numpy as jnp
+from jax import Array
+
+from passive_walker.brax import SYSTEM_PICKLE
+
+
+# ---------------------------------------------------------------------------
+
+
+def _load_system(pkl: Path | str = SYSTEM_PICKLE) -> brax.System:
+    """Load and return the pickled :class:`brax.System` (gzip is auto-detected)."""
+    pkl = Path(pkl)
+    opener = gzip.open if pkl.suffix == ".gz" else open
+    with opener(pkl, "rb") as f:
+        return pickle.load(f)
 
 class BraxPassiveWalker(PipelineEnv):
     """
