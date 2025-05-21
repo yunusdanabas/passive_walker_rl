@@ -73,7 +73,7 @@ class PassiveWalkerEnv(gym.Env):
     """
     metadata = {"render.modes": ["human", "rgb_array"]}
     
-    def __init__(self, xml_path=XML_PATH, simend=SIM_END, use_nn_for_hip=False, use_nn_for_knees=False, use_gui=True):
+    def __init__(self, xml_path=str(XML_PATH), simend=SIM_END, use_nn_for_hip=False, use_nn_for_knees=False, use_gui=True):
         """
         Initialize the passive walker environment.
         
@@ -396,13 +396,9 @@ class PassiveWalkerEnv(gym.Env):
             glfw.terminate()
 
 if __name__ == "__main__":
-    # Testing the environment
-    import os
-    dirname = os.path.dirname(__file__)
-    
     # Test demo mode (FSM for both hip and knees) with GUI
     print("Testing FSM mode (demo) with GUI:")
-    env_demo = PassiveWalkerEnv(str(XML_PATH), simend=10, use_nn_for_hip=False, use_nn_for_knees=False, use_gui=True)
+    env_demo = PassiveWalkerEnv(str(XML_PATH), simend=20, use_nn_for_hip=False, use_nn_for_knees=False, use_gui=True)
     obs = env_demo.reset()
     done = False
     total_reward = 0.0
