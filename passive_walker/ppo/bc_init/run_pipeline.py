@@ -21,7 +21,7 @@ from mujoco.glfw import glfw
 
 from passive_walker.ppo.bc_init.utils import initialize_policy, analyze_training_log
 from passive_walker.ppo.bc_init.train import Critic
-from passive_walker.ppo.bc_init import set_device, DATA_PPO_BC, XML_PATH, BC_DATA
+from passive_walker.ppo.bc_init import set_device, PPO_BC_DATA, XML_PATH, BC_DATA
 
 def ensure(cmd):
     """
@@ -58,14 +58,14 @@ def main():
     ])
 
     # Load trained policy and critic
-    policy_path = DATA_PPO_BC / f"trained_policy_with_critic_{args.hz}hz.pkl"
+    policy_path = PPO_BC_DATA / f"trained_policy_with_critic_{args.hz}hz.pkl"
     with open(policy_path, "rb") as f:
         policy, critic = pickle.load(f)
         
     # Analyze and plot training results
     if not args.no_plot:
-        analyze_training_log(log_path=DATA_PPO_BC / f"ppo_training_log_{args.hz}hz.pkl",
-                           save_path=DATA_PPO_BC / f"ppo_training_curve_{args.hz}hz.png")
+        analyze_training_log(log_path=PPO_BC_DATA / f"ppo_training_log_{args.hz}hz.pkl",
+                           save_path=PPO_BC_DATA / f"ppo_training_curve_{args.hz}hz.png")
 
     # Demo the trained policy in the environment
     env, get_scaled, get_env, _ = initialize_policy(

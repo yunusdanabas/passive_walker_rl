@@ -24,13 +24,23 @@ This approach helps solve exploration challenges in complex locomotion tasks by 
 ## Directory Structure
 
 ```
-passive_walker/ppo/bc_init/
-├── __init__.py           # Module configuration and path setup
-├── utils.py              # Utility functions for policy handling and RL algorithms
-├── collect.py            # Script to collect trajectory data
-├── train.py              # Main PPO training implementation
-├── evaluate.py           # Policy evaluation and visualization
-├── run_pipeline.py       # End-to-end pipeline script
+passive_walker/
+├── data/
+│   ├── bc/                    # BC training data and models
+│   └── ppo/
+│       └── bc_init/          # PPO training data
+├── results/
+│   ├── bc/                   # BC results and plots
+│   └── ppo/
+│       └── bc_init/         # PPO results, models, and plots
+└── ppo/
+    └── bc_init/
+        ├── __init__.py      # Module configuration and path setup
+        ├── utils.py         # Utility functions for policy handling and RL algorithms
+        ├── collect.py       # Script to collect trajectory data
+        ├── train.py         # Main PPO training implementation
+        ├── evaluate.py      # Policy evaluation and visualization
+        └── run_pipeline.py  # End-to-end pipeline script
 ```
 
 ## Usage
@@ -41,14 +51,14 @@ To run the entire BC-PPO training and demonstration pipeline:
 
 ```bash
 python -m passive_walker.ppo.bc_init.run_pipeline \
-    --bc-model /path/to/bc_model.pkl \
+    --bc-model hip_knee_mse_controller_20000steps.pkl \
     --sim-duration 30.0 \
     [--gpu]
 ```
 
 This will:
 1. Train a PPO agent using the BC model as initialization
-2. Save the trained policy with critic
+2. Save the trained policy and critic as `.eqx` files
 3. Demonstrate the policy in the environment
 
 ### Individual Components
@@ -57,7 +67,7 @@ This will:
 
 ```bash
 python -m passive_walker.ppo.bc_init.train \
-    --bc-model /path/to/bc_model.pkl \
+    --bc-model hip_knee_mse_controller_20000steps.pkl \
     --iters 200 \
     --rollout 2048 \
     --bc-coef 1.0 \
@@ -65,11 +75,18 @@ python -m passive_walker.ppo.bc_init.train \
     [--gpu]
 ```
 
+The training script will:
+- Load the BC model from `data/bc/hip_knee_mse/`
+- Save the trained policy and critic to `results/ppo/bc_init/` as:
+  - `policy_{hz}hz.eqx`
+  - `critic_{hz}hz.eqx`
+- Save training logs to `data/ppo/bc_init/`
+
 #### Data Collection
 
 ```bash
 python -m passive_walker.ppo.bc_init.collect \
-    --bc-model /path/to/bc_model.pkl \
+    --bc-model hip_knee_mse_controller_20000steps.pkl \
     --steps 4096 \
     --sigma 0.1 \
     [--gpu]
@@ -79,7 +96,8 @@ python -m passive_walker.ppo.bc_init.collect \
 
 ```bash
 python -m passive_walker.ppo.bc_init.evaluate \
-    --policy /path/to/trained_policy_with_critic.pkl \
+    --policy results/ppo/bc_init/policy_1000hz.eqx \
+    --critic results/ppo/bc_init/critic_1000hz.eqx \
     --sim-duration 30.0 \
     [--gpu]
 ```
@@ -101,6 +119,7 @@ python -m passive_walker.ppo.bc_init.evaluate \
 | `--lr-critic` | Learning rate for critic updates |
 | `--bc-coef` | Behavior Cloning regularization coefficient |
 | `--anneal` | Steps to anneal BC coefficient to zero |
+| `--hz` | Control frequency (default: 1000) |
 | `--gpu` | Flag to use GPU acceleration |
 
 ## Implementation Details
@@ -115,7 +134,7 @@ The implementation uses:
 - Clipped PPO objective for stable policy improvement
 - Behavioral Cloning regularization term to maintain proximity to the demonstration policy
 - Annealed BC coefficient that gradually reduces imitation influence
-- Generalized Advantage Estimation (GAE) for advantange calculation
+- Generalized Advantage Estimation (GAE) for advantage calculation
 
 ### BC Regularization 
 
@@ -124,9 +143,16 @@ The BC regularization coefficient is annealed according to:
 bc_coef = initial_bc_coef * max(0.0, 1 - total_steps/anneal_steps)
 ```
 
-## Data Management
+## File Organization
 
-All training data and policies are stored in `data/ppo/bc_init` directory.
+- **Data Directory** (`data/`):
+  - BC models and training data in `data/bc/`
+  - PPO training logs in `data/ppo/bc_init/`
+
+- **Results Directory** (`results/`):
+  - BC results and plots in `results/bc/`
+  - PPO models and plots in `results/ppo/bc_init/`
+  - Models saved as `.eqx` files with control frequency in filename
 
 ## Citation
 

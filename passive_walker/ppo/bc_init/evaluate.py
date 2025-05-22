@@ -14,8 +14,8 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from mujoco.glfw import glfw
 
-from passive_walker.ppo.bc_init import XML_PATH, set_device, DATA_PPO_BC
-from passive_walker.ppo.bc_init.utils import load_pickle
+from passive_walker.ppo.bc_init import XML_PATH, set_device, PPO_BC_RESULTS
+from passive_walker.ppo.bc_init.utils import load_model
 from passive_walker.envs.mujoco_env import PassiveWalkerEnv
 
 def main():
@@ -31,7 +31,7 @@ def main():
     set_device(args.gpu)
 
     # Load policy (ignore critic if present)
-    policy, _ = load_pickle(args.policy)
+    policy, _ = load_model(args.policy)
     
     # Initialize environment
     env = PassiveWalkerEnv(
@@ -73,11 +73,11 @@ def main():
     for i in range(min(3, traj_obs.shape[1]//2)):
         plt.plot(t, traj_obs[:,i], label=f"joint {i}")
     plt.title("Joint Positions"); plt.legend(); plt.show()
-    plt.savefig(DATA_PPO_BC / f"ppo_joint_positions_{args.hz}hz.png")
+    plt.savefig(PPO_BC_RESULTS / f"ppo_joint_positions_{args.hz}hz.png")
 
     # Plot rewards
     plt.figure(figsize=(8,3))
     plt.plot(t, rewards); plt.title("Reward per step"); plt.show()
-    plt.savefig(DATA_PPO_BC / f"ppo_rewards_{args.hz}hz.png")
+    plt.savefig(PPO_BC_RESULTS / f"ppo_rewards_{args.hz}hz.png")
 if __name__ == "__main__":
     main()

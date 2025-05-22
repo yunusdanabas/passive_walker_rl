@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from passive_walker.envs.mujoco_env import PassiveWalkerEnv
 from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
-from passive_walker.ppo.bc_init import DATA_PPO_BC
+from passive_walker.ppo.bc_init import PPO_BC_DATA, PPO_BC_RESULTS
 
 from pathlib import Path
 import jax
@@ -121,7 +121,6 @@ def initialize_policy(
 
     return env, get_scaled, get_env, bc_policy
 
-# — on‐policy rollout buffer —
 
 def collect_trajectories(
     env,
@@ -234,7 +233,7 @@ def policy_log_prob(
 
 # — Plotting utilities —
 
-def plot_training_rewards(rewards, save_path=DATA_PPO_BC / "ppo_training_curve.png", title="Average Reward per PPO Iteration", print_stats=True):
+def plot_training_rewards(rewards, save_path=PPO_BC_DATA / "ppo_training_curve.png", title="Average Reward per PPO Iteration", print_stats=True):
     """
     Plot average reward per PPO iteration.
     
@@ -273,13 +272,13 @@ def plot_training_rewards(rewards, save_path=DATA_PPO_BC / "ppo_training_curve.p
             percent_improvement = (improvement / abs(rewards[0] + 1e-10)) * 100  # Avoid division by zero
             print(f"Improvement: {improvement:.2f} ({percent_improvement:.1f}%)")
 
-def analyze_training_log(log_path=DATA_PPO_BC / "ppo_training_log.pkl", save_path=DATA_PPO_BC / "ppo_training_curve.png", title="Average Reward per PPO Iteration"):
+def analyze_training_log(log_path=PPO_BC_DATA / "ppo_training_log.pkl", save_path=PPO_BC_DATA / "ppo_training_curve.png", title="Average Reward per PPO Iteration"):
     """
     Load and analyze a training log, plotting the rewards.
     
     Args:
-        log_path: Path to the training log pickle file (default: DATA_PPO_BC/ppo_training_log.pkl)
-        save_path: Path to save the plot (default: DATA_PPO_BC/ppo_training_curve.png) 
+        log_path: Path to the training log pickle file (default: PPO_BC_DATA/ppo_training_log.pkl)
+        save_path: Path to save the plot (default: PPO_BC_DATA/ppo_training_curve.png) 
         title: Title for the plot
         
     Returns:
@@ -332,3 +331,36 @@ def plot_bc_coefficient(bc_coef_history, output_dir):
     plt.grid()
     plt.savefig(os.path.join(output_dir, "ppo_bc_coef_curve.png"))
     plt.show()
+
+def save_critic(critic, critic_file: Path):
+    """
+    Save a trained critic model to a file using tree_serialise_leaves.
+
+    Args:
+        critic: Trained critic model to save
+        critic_file: Path where to save the critic model
+    """
+    eqx.tree_serialise_leaves(critic_file, critic)
+
+def save_policy_and_critic(policy, critic, base_path: Path, hz: int = 0):
+    """
+    Save both policy and critic models to separate .eqx files.
+
+    Args:
+        policy: Trained policy model
+        critic: Trained critic model
+        base_path: Base directory to save the models
+        hz: Control frequency used for training
+    """
+    # Create results directory if it doesn't exist
+    base_path.mkdir(parents=True, exist_ok=True)
+    
+    # Save policy
+    policy_path = base_path / f"policy_{hz}hz.eqx"
+    eqx.tree_serialise_leaves(policy_path, policy)
+    print(f"Saved policy → {policy_path}")
+    
+    # Save critic
+    critic_path = base_path / f"critic_{hz}hz.eqx"
+    eqx.tree_serialise_leaves(critic_path, critic)
+    print(f"Saved critic → {critic_path}")

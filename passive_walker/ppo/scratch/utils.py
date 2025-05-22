@@ -22,7 +22,9 @@ from passive_walker.envs.mujoco_env import PassiveWalkerEnv
 from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
 from passive_walker.ppo.scratch import DATA_PPO_SCRATCH
 
-# — serialization —
+# ————————————————————————————————————————————————————————————————
+# Serialization Utilities
+# ————————————————————————————————————————————————————————————————
 
 def save_pickle(obj, path):
     """
@@ -50,7 +52,9 @@ def load_pickle(path):
     with open(path, "rb") as f:
         return pickle.load(f)
 
-# — policy initialization —
+# ————————————————————————————————————————————————————————————————
+# Policy Initialization
+# ————————————————————————————————————————————————————————————————
 
 def initialize_policy(
     obs_dim: int = None,
@@ -102,7 +106,9 @@ def initialize_policy(
 
     return env, get_scaled, get_env, policy_model
 
-# — on‐policy rollout buffer —
+# ————————————————————————————————————————————————————————————————
+# Trajectory Collection
+# ————————————————————————————————————————————————————————————————
 
 def collect_trajectories(
     env,
@@ -135,8 +141,8 @@ def collect_trajectories(
 
     for _ in range(num_steps):
         o_jnp = jnp.array(o, dtype=jnp.float32)
-        a     = env_action_fn(o_jnp)
-        sa    = scaled_action_fn(o_jnp) if scaled_action_fn else a
+        a = env_action_fn(o_jnp)
+        sa = scaled_action_fn(o_jnp) if scaled_action_fn else a
 
         o2, r, done, _ = env.step(np.array(a, dtype=np.float32))
         buf["obs"].append(o)
@@ -153,14 +159,16 @@ def collect_trajectories(
     # stack into numpy arrays
     return {k: np.array(v) for k, v in buf.items()}
 
-# — GAE —
+# ————————————————————————————————————————————————————————————————
+# Advantage Estimation
+# ————————————————————————————————————————————————————————————————
 
 def compute_advantages(
     rewards: np.ndarray,
     dones: np.ndarray,
     values: np.ndarray,
     gamma: float = 0.99,
-    lam:   float = 0.95
+    lam: float = 0.95
 ):
     """
     Compute Generalized Advantage Estimation (GAE).
@@ -187,7 +195,9 @@ def compute_advantages(
     returns = adv + values
     return adv, returns
 
-# — Gaussian log‐prob helper —
+# ————————————————————————————————————————————————————————————————
+# Policy Log Probability
+# ————————————————————————————————————————————————————————————————
 
 def policy_log_prob(
     policy_model,
@@ -207,26 +217,30 @@ def policy_log_prob(
     Returns:
         JAX array of log probabilities
     """
-    mean    = jax.vmap(policy_model)(obs_jnp)
-    var     = sigma**2
+    mean = jax.vmap(policy_model)(obs_jnp)
+    var = sigma**2
     log_std = jnp.log(sigma)
     lp = -0.5 * (((acts_jnp - mean)**2)/var + 2*log_std + jnp.log(2*jnp.pi))
     return jnp.sum(lp, axis=-1)
 
-# — Plotting utilities —
+# ————————————————————————————————————————————————————————————————
+# Visualization Utilities
+# ————————————————————————————————————————————————————————————————
 
-def plot_training_rewards(rewards, save_path=DATA_PPO_SCRATCH / "ppo_training_curve.png", title="Average Reward per PPO Iteration", print_stats=True):
+def plot_training_rewards(
+    rewards,
+    save_path=DATA_PPO_SCRATCH / "ppo_training_curve.png",
+    title="Average Reward per PPO Iteration",
+    print_stats=True
+):
     """
     Plot average reward per PPO iteration.
     
     Args:
         rewards: List or array of average rewards per iteration
-        save_path: Path to save the figure (default: DATA_PPO_SCRATCH/ppo_training_curve.png)
+        save_path: Path to save the figure
         title: Title for the plot
         print_stats: Whether to print statistics about the rewards
-        
-    Returns:
-        None
     """
     plt.figure(figsize=(8, 4))
     plt.plot(rewards, marker='o')
@@ -251,20 +265,21 @@ def plot_training_rewards(rewards, save_path=DATA_PPO_SCRATCH / "ppo_training_cu
         # Print improvement statistics if we have more than one iteration
         if len(rewards) > 1:
             improvement = rewards[-1] - rewards[0]
-            percent_improvement = (improvement / abs(rewards[0] + 1e-10)) * 100  # Avoid division by zero
+            percent_improvement = (improvement / abs(rewards[0] + 1e-10)) * 100
             print(f"Improvement: {improvement:.2f} ({percent_improvement:.1f}%)")
 
-def analyze_training_log(log_path=DATA_PPO_SCRATCH / "ppo_training_log.pkl", save_path=DATA_PPO_SCRATCH / "ppo_training_curve.png", title="Average Reward per PPO Iteration"):
+def analyze_training_log(
+    log_path=DATA_PPO_SCRATCH / "ppo_training_log.pkl",
+    save_path=DATA_PPO_SCRATCH / "ppo_training_curve.png",
+    title="Average Reward per PPO Iteration"
+):
     """
     Load and analyze a training log, plotting the rewards.
     
     Args:
-        log_path: Path to the training log pickle file (default: DATA_PPO_SCRATCH/ppo_training_log.pkl)
-        save_path: Path to save the plot (default: DATA_PPO_SCRATCH/ppo_training_curve.png) 
+        log_path: Path to the training log pickle file
+        save_path: Path to save the plot
         title: Title for the plot
-        
-    Returns:
-        None
     """
     log = load_pickle(log_path)
     rewards = log["rewards"]
@@ -280,7 +295,9 @@ def plot_joint_and_reward(traj_obs, rewards, save_prefix=DATA_PPO_SCRATCH / "ppo
         save_prefix: Prefix for saving plot files
     """
     t = np.arange(len(rewards))
-    n_q = traj_obs.shape[1] // 2 if traj_obs.shape[1] > 6 else traj_obs.shape[1] # safety for qpos
+    n_q = traj_obs.shape[1] // 2 if traj_obs.shape[1] > 6 else traj_obs.shape[1]
+    
+    # Plot joint positions
     plt.figure(figsize=(8,4))
     for i in range(min(3, n_q)):
         plt.plot(t, traj_obs[:, i], label=f"Joint {i+1}")
@@ -292,6 +309,7 @@ def plot_joint_and_reward(traj_obs, rewards, save_prefix=DATA_PPO_SCRATCH / "ppo
     plt.savefig(f"{save_prefix}_joint_positions.png", dpi=150)
     plt.show()
 
+    # Plot rewards
     plt.figure(figsize=(8,3))
     plt.plot(t, rewards, color='tab:blue')
     plt.title("Reward per Step")

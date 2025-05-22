@@ -15,9 +15,15 @@ import numpy as np
 import jax.numpy as jnp
 from mujoco.glfw import glfw
 
-from passive_walker.ppo.scratch import DATA_PPO_SCRATCH, XML_PATH, set_device
-from passive_walker.ppo.scratch.utils import initialize_policy, load_pickle
+from passive_walker.ppo.scratch import (
+    DATA_PPO_SCRATCH, XML_PATH, set_device,
+    DEFAULT_HZ
+)
+from passive_walker.ppo.scratch.utils import (
+    initialize_policy, load_pickle
+)
 from passive_walker.ppo.scratch.train import Critic
+from passive_walker.envs.mujoco_env import PassiveWalkerEnv
 
 def ensure(cmd):
     """
@@ -31,9 +37,12 @@ def ensure(cmd):
 
 def main():
     p = argparse.ArgumentParser(description="Run PPO-from-scratch pipeline (train + demo)")
-    p.add_argument("--gpu", action="store_true", help="Use GPU for JAX")
-    p.add_argument("--sim-duration", type=float, default=30.0, help="Seconds for the final GUI rollout")
-    p.add_argument("--hz", type=int, default=1000, help="Simulation frequency (Hz)")
+    p.add_argument("--gpu", action="store_true",
+                  help="Use GPU for JAX")
+    p.add_argument("--sim-duration", type=float, default=30.0,
+                  help="Seconds for the final GUI rollout")
+    p.add_argument("--hz", type=int, default=DEFAULT_HZ,
+                  help=f"Simulation frequency (Hz) (default: {DEFAULT_HZ})")
     args = p.parse_args()
 
     # 0) Configure device
@@ -49,15 +58,16 @@ def main():
     ensure(train_cmd)
 
     # 2) Load trained policy and critic
-    trained_path = DATA_PPO_SCRATCH / f"trained_policy_with_critic_{args.hz}hz.pkl"
-    with open(trained_path, "rb") as f:
-        policy, critic = pickle.load(f)
-    print(f"Loaded trained policy from {trained_path}")
+    policy_path = DATA_PPO_SCRATCH / f"policy_{args.hz}hz.eqx"
+    critic_path = DATA_PPO_SCRATCH / f"critic_{args.hz}hz.eqx"
+    
+    with open(policy_path, "rb") as f:
+        policy = pickle.load(f)
+    with open(critic_path, "rb") as f:
+        critic = pickle.load(f)
+    print(f"Loaded trained policy from {policy_path}")
 
     # 3) Re-initialize env and get policy fn
-    from passive_walker.envs.mujoco_env import PassiveWalkerEnv
-
-    # Infer obs_dim/act_dim for fresh env
     env = PassiveWalkerEnv(
         xml_path=str(XML_PATH),
         simend=args.sim_duration,

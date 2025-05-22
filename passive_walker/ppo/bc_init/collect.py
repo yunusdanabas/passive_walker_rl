@@ -5,14 +5,13 @@ Saves trajectories to a pickle file for later use in training.
 """
 
 import argparse
-import jax.numpy as jnp
-import numpy as np
+import pickle
 
-from passive_walker.ppo.bc_init import DATA_PPO_BC, XML_PATH, BC_DATA, set_device
-from passive_walker.ppo.bc_init.utils import initialize_policy, collect_trajectories, save_pickle
+from passive_walker.ppo.bc_init import XML_PATH, BC_RESULTS, PPO_BC_DATA, set_device
+from passive_walker.ppo.bc_init.utils import initialize_policy, collect_trajectories
 
 # Default paths and parameters
-DEFAULT_BC_MODEL = str(BC_DATA / "hip_knee_mse" / "hip_knee_mse_controller_20000steps.pkl")
+DEFAULT_BC_MODEL = str(BC_RESULTS / "hip_knee_mse" / "hip_knee_mse_controller_20000steps.eqx")
 DEFAULT_STEPS = 4096
 DEFAULT_SIGMA = 0.1
 
@@ -50,8 +49,9 @@ def main():
         render=False
     )
 
-    out_file = DATA_PPO_BC / "trajectories.pkl"
-    save_pickle(traj, out_file)
+    out_file = PPO_BC_DATA / "trajectories.pkl"
+    with open(out_file, "wb") as f:
+        pickle.dump(traj, f)
     print(f"[collect] Saved trajectories to {out_file}")
 
 if __name__ == "__main__":
