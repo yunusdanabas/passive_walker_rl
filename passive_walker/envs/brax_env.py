@@ -1,5 +1,4 @@
-# NEW / CHANGED – final tidy-up: we now lazy-load the cached System once,
-# expose .observation_size / .action_size and remove v1-only imports.
+# passive_walker/envs/brax_env.py
 
 from __future__ import annotations
 import jax, jax.numpy as jnp
