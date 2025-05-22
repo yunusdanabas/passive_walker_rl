@@ -16,15 +16,37 @@ Usage:
         [--hz HZ] [--seed SEED] [--gpu]
 """
 
-import argparse, pickle
+# Standard library imports
+import argparse
+import pickle
+from pathlib import Path
+
+# Third-party imports
 import numpy as np
-import jax, jax.numpy as jnp
+import jax
+import jax.numpy as jnp
 import equinox as eqx
 import optax
 from mujoco.glfw import glfw
 
-from passive_walker.ppo.bc_init.utils import initialize_policy, compute_advantages
-from passive_walker.ppo.bc_init import set_device, DATA_PPO_BC, XML_PATH, BC_DATA
+# Local imports
+from passive_walker.ppo.bc_init.utils import (
+    initialize_policy,
+    compute_advantages,
+    save_policy_and_critic
+)
+from passive_walker.ppo.bc_init import (
+    set_device,
+    PPO_BC_DATA,
+    PPO_BC_RESULTS,
+    XML_PATH,
+    BC_DATA,
+    save_model
+)
+
+# ————————————————————————————————————————————————————————————————
+# Critic Network Definition
+# ————————————————————————————————————————————————————————————————
 
 class Critic(eqx.Module):
     """
@@ -47,10 +69,15 @@ class Critic(eqx.Module):
         self.l1 = eqx.nn.Linear(obs_dim, hidden,  key=k1)
         self.l2 = eqx.nn.Linear(hidden,  hidden,  key=k2)
         self.l3 = eqx.nn.Linear(hidden,  1,       key=k3)
+    
     def __call__(self, x):
         x = jax.nn.relu(self.l1(x))
         x = jax.nn.relu(self.l2(x))
         return self.l3(x).squeeze()
+
+# ————————————————————————————————————————————————————————————————
+# Policy and PPO Loss Functions
+# ————————————————————————————————————————————————————————————————
 
 def policy_log_prob(policy, obs, acts, sigma):
     """
@@ -98,6 +125,10 @@ def ppo_loss_fn(policy, obs, acts, old_lp, adv, clip_eps, bc_labels, bc_coef, si
     im_loss = jnp.mean((jax.vmap(policy)(obs) - bc_labels)**2)
     return ppo_obj + bc_coef * im_loss
 
+# ————————————————————————————————————————————————————————————————
+# Training Step Functions
+# ————————————————————————————————————————————————————————————————
+
 @jax.jit
 def ppo_step(policy, opt_state, obs, acts, old_lp, adv, clip_eps, bc_labels, bc_coef, sigma):
     """
@@ -142,6 +173,10 @@ def critic_step(critic, opt_state, obs, returns):
     grads = jax.grad(vf_loss)(critic, obs, returns)
     updates, opt_state = critic_optimizer.update(grads, opt_state)
     return eqx.apply_updates(critic, updates), opt_state
+
+# ————————————————————————————————————————————————————————————————
+# Main Training Function
+# ————————————————————————————————————————————————————————————————
 
 def main():
     # Parse command line arguments
@@ -260,16 +295,12 @@ def main():
 
     env.close()
     
-    # Save trained policy and critic
-    out_path = DATA_PPO_BC / f"trained_policy_with_critic_{args.hz}hz.pkl"
-    with open(out_path, "wb") as f:
-        pickle.dump((policy, critic), f)
-    print(f"Saved policy+critic → {out_path}")
+    # Save trained policy and critic using the new function
+    save_policy_and_critic(policy, critic, PPO_BC_RESULTS, args.hz)
 
     # Save training rewards log
-    from passive_walker.ppo.bc_init.utils import save_pickle
-    log_path = DATA_PPO_BC / f"ppo_training_log_{args.hz}hz.pkl"
-    save_pickle({"rewards": rewards_log}, log_path)
+    log_path = PPO_BC_DATA / f"ppo_training_log_{args.hz}hz.pkl"
+    save_model({"rewards": rewards_log}, log_path)
     print(f"Saved reward log → {log_path}")
 
 if __name__ == "__main__":

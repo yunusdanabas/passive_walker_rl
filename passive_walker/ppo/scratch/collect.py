@@ -12,14 +12,14 @@ import argparse
 import jax.numpy as jnp
 import numpy as np
 
-from passive_walker.ppo.scratch import DATA_PPO_SCRATCH, XML_PATH, set_device
-from passive_walker.ppo.scratch.utils import initialize_policy, collect_trajectories, save_pickle
+from passive_walker.ppo.scratch import (
+    DATA_PPO_SCRATCH, XML_PATH, set_device,
+    DEFAULT_STEPS, DEFAULT_SIGMA, DEFAULT_HZ
+)
+from passive_walker.ppo.scratch.utils import (
+    initialize_policy, collect_trajectories, save_pickle
+)
 from passive_walker.envs.mujoco_env import PassiveWalkerEnv
-
-# Default parameters
-DEFAULT_STEPS = 4096
-DEFAULT_SIGMA = 0.1
-DEFAULT_HZ = 200
 
 def main():
     # Parse command line arguments

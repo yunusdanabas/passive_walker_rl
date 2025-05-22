@@ -7,3 +7,49 @@ python -m passive_walker.bc.knee_mse.run_pipeline --gpu --plot
 python -m passive_walker.bc.hip_knee_mse.run_pipeline --gpu --plot
 
 python -m passive_walker.bc.hip_knee_alternatives.run_comparison_pipeline --gpu
+
+# PPO Training and Evaluation
+# --------------------------
+
+# Standard PPO training
+python -m passive_walker.ppo.scratch.train --gpu --hz 1000
+
+# High-iteration PPO with large batch size (for stability)
+python -m passive_walker.ppo.scratch.train --gpu --hz 1000 \
+    --iterations 1000 \
+    --rollout-steps 16384 \
+    --ppo-epochs 20 \
+    --batch-size 512 \
+    --policy-lr 5e-5 \
+    --critic-lr 2e-4
+
+# Exploration-focused PPO (higher sigma, more steps)
+python -m passive_walker.ppo.scratch.train --gpu --hz 1000 \
+    --iterations 800 \
+    --rollout-steps 32768 \
+    --ppo-epochs 15 \
+    --batch-size 1024 \
+    --sigma 0.2 \
+    --clip-eps 0.3 \
+    --policy-lr 1e-4 \
+    --critic-lr 5e-4
+
+# Conservative PPO (lower learning rates, more epochs)
+python -m passive_walker.ppo.scratch.train --gpu --hz 1000 \
+    --iterations 1200 \
+    --rollout-steps 8192 \
+    --ppo-epochs 30 \
+    --batch-size 256 \
+    --sigma 0.1 \
+    --clip-eps 0.15 \
+    --policy-lr 3e-5 \
+    --critic-lr 1e-4
+
+# Collect trajectories for analysis
+python -m passive_walker.ppo.scratch.collect --gpu --steps 4096 --hz 1000
+
+# Evaluate trained policy
+python -m passive_walker.ppo.scratch.evaluate --gpu --policy policy_1000hz.eqx --hz 1000
+
+# Run complete PPO pipeline (train + demo)
+python -m passive_walker.ppo.scratch.run_pipeline --gpu --hz 1000

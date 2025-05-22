@@ -6,22 +6,27 @@ This script initializes a policy and critic from scratch (no BC pre-training),
 then trains them using Proximal Policy Optimization (PPO) algorithm.
 """
 
-import os
 import argparse
 import numpy as np
 import jax
 import jax.numpy as jnp
 import equinox as eqx
 import optax
-import pickle
 
-from passive_walker.ppo.scratch import XML_PATH, DATA_PPO_SCRATCH, set_device
+from passive_walker.ppo.scratch import (
+    XML_PATH, DATA_PPO_SCRATCH, set_device,
+    save_policy_and_critic, save_model,
+    DEFAULT_ITERATIONS, DEFAULT_ROLLOUT_STEPS,
+    DEFAULT_PPO_EPOCHS, DEFAULT_BATCH_SIZE,
+    DEFAULT_GAMMA, DEFAULT_LAMBDA, DEFAULT_CLIP_EPS,
+    DEFAULT_SIGMA, DEFAULT_POLICY_LR, DEFAULT_CRITIC_LR,
+    DEFAULT_HZ
+)
 from passive_walker.ppo.scratch.utils import (
     initialize_policy,
     collect_trajectories,
     compute_advantages,
     policy_log_prob,
-    save_pickle,
     plot_training_rewards
 )
 from passive_walker.envs.mujoco_env import PassiveWalkerEnv
@@ -49,25 +54,37 @@ class Critic(eqx.Module):
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Train PPO from scratch")
-    parser.add_argument("--iterations", type=int, default=500, help="Number of PPO iterations")
-    parser.add_argument("--rollout-steps", type=int, default=8192, help="Steps to collect per iteration")
-    parser.add_argument("--ppo-epochs", type=int, default=10, help="Epochs per PPO update")
-    parser.add_argument("--batch-size", type=int, default=256, help="Minibatch size")
-    parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
-    parser.add_argument("--lam", type=float, default=0.95, help="GAE lambda")
-    parser.add_argument("--clip-eps", type=float, default=0.2, help="PPO clipping epsilon")
-    parser.add_argument("--sigma", type=float, default=0.1, help="Policy std dev")
-    parser.add_argument("--policy-lr", type=float, default=1e-4, help="Policy learning rate")
-    parser.add_argument("--critic-lr", type=float, default=1e-3, help="Critic learning rate")
-    parser.add_argument("--gpu", action="store_true", help="Use GPU acceleration")
-    parser.add_argument("--hz", type=int, default=1000, help="Simulation frequency (Hz)")
+    parser.add_argument("--iterations", type=int, default=DEFAULT_ITERATIONS,
+                       help=f"Number of PPO iterations (default: {DEFAULT_ITERATIONS})")
+    parser.add_argument("--rollout-steps", type=int, default=DEFAULT_ROLLOUT_STEPS,
+                       help=f"Steps to collect per iteration (default: {DEFAULT_ROLLOUT_STEPS})")
+    parser.add_argument("--ppo-epochs", type=int, default=DEFAULT_PPO_EPOCHS,
+                       help=f"Epochs per PPO update (default: {DEFAULT_PPO_EPOCHS})")
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE,
+                       help=f"Minibatch size (default: {DEFAULT_BATCH_SIZE})")
+    parser.add_argument("--gamma", type=float, default=DEFAULT_GAMMA,
+                       help=f"Discount factor (default: {DEFAULT_GAMMA})")
+    parser.add_argument("--lam", type=float, default=DEFAULT_LAMBDA,
+                       help=f"GAE lambda (default: {DEFAULT_LAMBDA})")
+    parser.add_argument("--clip-eps", type=float, default=DEFAULT_CLIP_EPS,
+                       help=f"PPO clipping epsilon (default: {DEFAULT_CLIP_EPS})")
+    parser.add_argument("--sigma", type=float, default=DEFAULT_SIGMA,
+                       help=f"Policy std dev (default: {DEFAULT_SIGMA})")
+    parser.add_argument("--policy-lr", type=float, default=DEFAULT_POLICY_LR,
+                       help=f"Policy learning rate (default: {DEFAULT_POLICY_LR})")
+    parser.add_argument("--critic-lr", type=float, default=DEFAULT_CRITIC_LR,
+                       help=f"Critic learning rate (default: {DEFAULT_CRITIC_LR})")
+    parser.add_argument("--gpu", action="store_true",
+                       help="Use GPU acceleration")
+    parser.add_argument("--hz", type=int, default=DEFAULT_HZ,
+                       help=f"Simulation frequency (Hz) (default: {DEFAULT_HZ})")
     args = parser.parse_args()
 
     # Set device (CPU/GPU)
     set_device(args.gpu)
 
     # Init env and policy/critic from scratch
-    dummy_env = PassiveWalkerEnv(xml_path=str(XML_PATH), simend=30.0, use_gui=False)
+    dummy_env = PassiveWalkerEnv(xml_path=str(XML_PATH), simend=args.rollout_steps/args.hz, use_gui=False)
     obs_dim = dummy_env.observation_space.shape[0]
     act_dim = dummy_env.action_space.shape[0]
     
@@ -75,7 +92,7 @@ def main():
         obs_dim=obs_dim, 
         act_dim=act_dim, 
         xml_path=str(XML_PATH), 
-        simend=30.0, 
+        simend=args.rollout_steps/args.hz, 
         sigma=args.sigma, 
         use_gui=False
     )
@@ -161,15 +178,12 @@ def main():
         print(f"[PPO scratch] iter {it}/{args.iterations}  avg_rew={avg_reward:.2f}")
 
     # Save final model/critic/log
-    output_path = DATA_PPO_SCRATCH / f"trained_policy_with_critic_{args.hz}hz.pkl"
-    with open(output_path, "wb") as f:
-        pickle.dump((policy, critic), f)
-    print(f"[PPO scratch] saved policy → {output_path}")
+    save_policy_and_critic(policy, critic, DATA_PPO_SCRATCH, args.hz)
     
     # Save training log
     log = {"rewards": reward_history}
     log_path = DATA_PPO_SCRATCH / f"ppo_training_log_{args.hz}hz.pkl"
-    save_pickle(log, log_path)
+    save_model(log, log_path)
     print(f"[PPO scratch] saved log → {log_path}")
     
     # Plot training curve
