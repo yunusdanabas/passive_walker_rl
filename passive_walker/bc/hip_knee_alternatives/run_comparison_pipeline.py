@@ -173,11 +173,11 @@ def main():
         description="Run comparison pipeline for all BC variants"
     )
     p.add_argument(
-        "--steps", type=int, default=50_000,
+        "--steps", type=int, default=100_000,
         help="Number of simulation steps to use for training"
     )
     p.add_argument(
-        "--hz", type=int, default=200,
+        "--hz", type=int, default=500,
         help="Simulation frequency in Hz"
     )
     p.add_argument(
@@ -216,7 +216,11 @@ def main():
         print(f"\nProcessing {name.upper()} variant...")
         if args.force_retrain:
             print(f"[pipeline] Force retraining {name.upper()} model...")
-            model, loss_history = train_model(obs, labels, loss_type=name)
+            model, loss_history = train_model(obs, labels, loss_type=name, 
+                                              epochs=50,
+                                              batch_size=64,
+                                              hidden_size=256,
+                                              lr=1e-4)
             training_time = 0.0  # Training time not tracked in force retrain mode
         else:
             model, loss_history, training_time = load_or_train_model(

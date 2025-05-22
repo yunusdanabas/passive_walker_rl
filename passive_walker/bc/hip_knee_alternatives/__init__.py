@@ -74,7 +74,7 @@ def load_demo_data(demo_file: Path):
     return jnp.array(data["obs"]), jnp.array(data["labels"])
 
 
-def train_model(obs, labels, loss_type="mse", epochs=100, batch_size=32, hidden_size=256, lr=3e-4):
+def train_model(obs, labels, loss_type="mse", epochs=100, batch_size=32, hidden_size=256, lr=1e-4, verbose=True):
     """
     Train a neural network model using behavioral cloning.
 
@@ -86,6 +86,7 @@ def train_model(obs, labels, loss_type="mse", epochs=100, batch_size=32, hidden_
         batch_size: Batch size for training
         hidden_size: Size of hidden layers in the neural network
         lr: Learning rate
+        verbose: Whether to print training progress
 
     Returns:
         Tuple of (trained model, loss history)
@@ -131,7 +132,8 @@ def train_model(obs, labels, loss_type="mse", epochs=100, batch_size=32, hidden_
             model, opt_state = step(model, opt_state, obs[idx], labels[idx])
         loss = float(loss_fn(model, obs, labels))
         loss_history.append(loss)
-        print(f"[{loss_type.upper()}] epoch {ep:02d}  loss={loss:.4f}")
+        if verbose:
+            print(f"[{loss_type.upper()}] epoch {ep:02d}  loss={loss:.4f}")
 
     return model, loss_history
 

@@ -34,8 +34,8 @@ def main():
     """Run the complete behavior cloning pipeline."""
     import argparse
     p = argparse.ArgumentParser(description="Full hip-only BC pipeline")
-    p.add_argument("--steps",         type=int,   default=50_000, help="Demo steps")
-    p.add_argument("--epochs",        type=int,   default=50,    help="Training epochs")
+    p.add_argument("--steps",         type=int,   default=20_000, help="Demo steps")
+    p.add_argument("--epochs",        type=int,   default=30,    help="Training epochs")
     p.add_argument("--batch",         type=int,   default=32,     help="Batch size")
     p.add_argument("--hidden-size",   type=int,   default=256,    help="Hidden layer size")
     p.add_argument("--lr",            type=float, default=3e-4,   help="Learning rate")
