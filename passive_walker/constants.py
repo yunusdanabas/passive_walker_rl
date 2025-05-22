@@ -23,6 +23,9 @@ DATA_PPO_BC = ROOT / "data" / "ppo" / "bc_init"
 DATA_PPO_BC.mkdir(parents=True, exist_ok=True)
 
 # Results directories
+RESULTS = ROOT / "results"
+RESULTS.mkdir(parents=True, exist_ok=True)
+
 RESULTS_BC = ROOT / "results" / "bc"
 RESULTS_BC.mkdir(parents=True, exist_ok=True)
 
