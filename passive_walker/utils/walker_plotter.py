@@ -26,7 +26,7 @@ from passive_walker.constants import XML_PATH, RESULTS
 from passive_walker.ppo.scratch import load_model
 
 # ––– Defaults ––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
-SAVE_DIR = RESULTS / "figs"   # override with --out
+SAVE_DIR = RESULTS / "figs" / "FSM"   # override with --out
 SIM_SECS = 30.0                   # override with --secs
 CTRL_HZ  = 1000                   # PPO default
 DT       = 1.0 / CTRL_HZ
