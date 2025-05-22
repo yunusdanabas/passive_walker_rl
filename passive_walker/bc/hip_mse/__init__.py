@@ -31,10 +31,13 @@ from passive_walker.constants import (
 DATA_BC_HIP_MSE = DATA_BC / "hip_mse"
 DATA_BC_HIP_MSE.mkdir(parents=True, exist_ok=True)
 
+RESULTS_BC_HIP_MSE = RESULTS_BC / "hip_mse"
+RESULTS_BC_HIP_MSE.mkdir(parents=True, exist_ok=True)
+
 from pathlib import Path
 import jax
 import equinox as eqx
-from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
+from passive_walker.controllers.nn.hip_nn import HipController
 
 def save_model(model, model_file: Path):
     """
@@ -57,7 +60,7 @@ def load_model(path: Path,hidden_size=128,input_size=11):
     Returns:
         Loaded model
     """
-    model = HipKneeController(
+    model = HipController(
         input_size=input_size,
         hidden_size=hidden_size,
         key=jax.random.PRNGKey(42)

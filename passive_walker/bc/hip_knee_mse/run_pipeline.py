@@ -19,29 +19,27 @@ import argparse
 import pickle
 import numpy as np
 from mujoco.glfw import glfw
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import optax
-import equinox as eqx
 
 from passive_walker.envs.mujoco_fsm_env import PassiveWalkerEnv
 from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
 from passive_walker.bc.hip_knee_mse.collect import collect_demo_data
 from passive_walker.bc.hip_knee_mse.train import train_nn_controller
-from passive_walker.bc.hip_knee_mse import DATA_BC_HIP_KNEE_MSE, XML_PATH, set_device, save_model
+from passive_walker.bc.hip_knee_mse import DATA_BC_HIP_KNEE_MSE, RESULTS_BC_HIP_KNEE_MSE, XML_PATH, set_device, save_model
 from passive_walker.utils.io import save_pickle
 
 
 def main():
     """Run the complete behavior cloning pipeline."""
     p = argparse.ArgumentParser(description="Full hip+knee BC pipeline")
-    p.add_argument("--steps",         type=int,   default=20_000, help="Demo steps")
+    p.add_argument("--steps",         type=int,   default=50_000, help="Demo steps")
     p.add_argument("--epochs",        type=int,   default=50,    help="Training epochs")
     p.add_argument("--batch",         type=int,   default=32,     help="Batch size")
     p.add_argument("--hidden-size",   type=int,   default=256,    help="Hidden layer size")
-    p.add_argument("--lr",            type=float, default=1e-4,   help="Learning rate")
+    p.add_argument("--lr",            type=float, default=3e-4,   help="Learning rate")
     p.add_argument("--sim-duration",  type=float, default=30.0,   help="Test sim duration (s)")
     p.add_argument("--seed",          type=int,   default=42,     help="PRNG seed")
     p.add_argument("--hz",            type=int,   default=200,    help="Simulation frequency (Hz)")
@@ -97,12 +95,12 @@ def main():
     )
 
     # 3. Save the trained model and loss history
-    out_file = DATA_BC_HIP_KNEE_MSE / f"hip_knee_mse_controller_{args.steps}steps.eqx"
+    out_file = RESULTS_BC_HIP_KNEE_MSE / f"hip_knee_mse_controller_{args.steps}steps.eqx"
     save_model(model, out_file)
     print(f"3) Saved trained controller → {out_file}")
 
     if args.plot:
-        loss_file = DATA_BC_HIP_KNEE_MSE / f"training_loss_history_{args.steps}steps.pkl"
+        loss_file = RESULTS_BC_HIP_KNEE_MSE / f"training_loss_history_{args.steps}steps.pkl"
         with open(loss_file, "wb") as f:
             pickle.dump(loss_hist, f)
         print(f"   Saved loss history → {loss_file}")

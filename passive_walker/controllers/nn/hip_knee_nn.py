@@ -1,17 +1,14 @@
 # passive_walker/controllers/nn/hip_knee_nn.py
-"""HipKneeController – one small MLP that outputs **[hip, kneeL, kneeR]**.
+"""Combined neural network controller for hip and knee joints."""
 
-* Two hidden layers (configurable)
-* tanh output → actions in [-1, 1]
-"""
-
-from typing import Optional
 import jax
 import jax.numpy as jnp
 import equinox as eqx
 
 
 class HipKneeController(eqx.Module):
+    """MLP controller for hip and both knee joints."""
+    
     fc1: eqx.nn.Linear
     fc2: eqx.nn.Linear
     fc3: eqx.nn.Linear
@@ -20,8 +17,8 @@ class HipKneeController(eqx.Module):
         self,
         input_size: int,
         hidden_size: int = 128,
-        output_size: int = 3,
-        key: Optional["jax.random.PRNGKey"] = None,
+        output_size: int = 3,  # [hip, kneeL, kneeR]
+        key: "jax.random.PRNGKey" = None,
     ):
         if key is None:
             key = jax.random.PRNGKey(0)
@@ -31,7 +28,8 @@ class HipKneeController(eqx.Module):
         self.fc3 = eqx.nn.Linear(hidden_size, output_size, key=k3)
 
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        """Forward pass with tanh output in [-1, 1]."""
         x = jax.nn.relu(self.fc1(x))
         x = jax.nn.relu(self.fc2(x))
         x = self.fc3(x)
-        return jnp.tanh(x)          # bound each joint command to [-1, 1]
+        return jnp.tanh(x)

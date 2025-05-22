@@ -18,14 +18,12 @@ Usage:
 import argparse
 import numpy as np
 import jax.numpy as jnp
-from pathlib import Path
-import glob
 
 from passive_walker.envs.mujoco_fsm_env import PassiveWalkerEnv
-from passive_walker.utils.io import save_pickle, load_pickle
+from passive_walker.utils.io import save_pickle
 from passive_walker.bc.knee_mse import DATA_BC_KNEE_MSE, XML_PATH, set_device
 
-def collect_demo_data(env: PassiveWalkerEnv, num_steps: int = 20000):
+def collect_demo_data(env: PassiveWalkerEnv, num_steps: int = 50000):
     """
     Collect (obs, [left_knee, right_knee]) pairs from the FSM-controlled knees.
 
@@ -60,7 +58,7 @@ def main():
         description="Collect FSM knee demos for BC training"
     )
     p.add_argument(
-        "--steps", type=int, default=20_000,
+        "--steps", type=int, default=50_000,
         help="Number of simulation steps to collect"
     )
     p.add_argument(

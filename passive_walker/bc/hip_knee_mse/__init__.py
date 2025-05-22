@@ -34,6 +34,9 @@ from passive_walker.constants import (
 DATA_BC_HIP_KNEE_MSE = DATA_BC / "hip_knee_mse"
 DATA_BC_HIP_KNEE_MSE.mkdir(parents=True, exist_ok=True)
 
+RESULTS_BC_HIP_KNEE_MSE = RESULTS_BC / "hip_knee_mse"
+RESULTS_BC_HIP_KNEE_MSE.mkdir(parents=True, exist_ok=True)
+
 def save_model(model, model_file: Path):
     """
     Save a trained model to a file.

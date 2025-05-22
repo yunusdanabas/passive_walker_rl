@@ -22,7 +22,7 @@ import equinox as eqx
 
 from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
 from passive_walker.bc.utils import plot_loss_curve
-from passive_walker.bc.hip_knee_mse import DATA_BC_HIP_KNEE_MSE, set_device, save_model, load_model
+from passive_walker.bc.hip_knee_mse import DATA_BC_HIP_KNEE_MSE, RESULTS_BC_HIP_KNEE_MSE, set_device, save_model
 
 
 def train_nn_controller(model, optimizer, obs, labels, epochs, batch, plot_loss=True, steps=None):
@@ -66,7 +66,7 @@ def train_nn_controller(model, optimizer, obs, labels, epochs, batch, plot_loss=
         print(f"[train] epoch {ep:02d}  loss={loss:.4f}")
 
     if plot_loss:
-        plot_loss_curve(loss_hist, save=str(DATA_BC_HIP_KNEE_MSE / 'loss_histories' / f'hip_knee_mse_training_loss_{steps}steps.png'))
+        plot_loss_curve(loss_hist, save=str(RESULTS_BC_HIP_KNEE_MSE / 'loss_histories' / f'hip_knee_mse_training_loss_{steps}steps.png'))
 
     return model, loss_hist
 
@@ -74,11 +74,11 @@ def train_nn_controller(model, optimizer, obs, labels, epochs, batch, plot_loss=
 def main():
     """Main training script."""
     p = argparse.ArgumentParser(description="Train NN hip+knee controller (MSE BC)")
-    p.add_argument("--epochs",      type=int,   default=100, help="Number of epochs")
+    p.add_argument("--epochs",      type=int,   default=50, help="Number of epochs")
     p.add_argument("--batch",       type=int,   default=32,  help="Batch size")
-    p.add_argument("--hidden-size", type=int,   default=128, help="Hidden layer size")
-    p.add_argument("--lr",          type=float, default=1e-4,help="Learning rate")
-    p.add_argument("--steps",       type=int,   default=20_000, help="Number of steps in demo data")
+    p.add_argument("--hidden-size", type=int,   default=256, help="Hidden layer size")
+    p.add_argument("--lr",          type=float, default=3e-4,help="Learning rate")
+    p.add_argument("--steps",       type=int,   default=50_000, help="Number of steps in demo data")
     p.add_argument("--gpu",         action="store_true",    help="Use GPU if available")
     p.add_argument("--plot",        action="store_true",    help="Plot training loss curve")
     args = p.parse_args()
@@ -107,16 +107,16 @@ def main():
     )
 
     # Save final weights with step count in filename
-    out_file = DATA_BC_HIP_KNEE_MSE / f"hip_knee_mse_controller_{args.steps}steps.eqx"
+    out_file = RESULTS_BC_HIP_KNEE_MSE / f"hip_knee_mse_controller_{args.steps}steps.eqx"
     save_model(model, out_file)
-    print(f"[train] saved → {out_file}")
+    print(f"[train] Saved trained controller → {out_file}")
 
     # Save loss history with step count in filename
     if args.plot:
-        loss_file = DATA_BC_HIP_KNEE_MSE / f"training_loss_history_{args.steps}steps.pkl"
+        loss_file = RESULTS_BC_HIP_KNEE_MSE / f"training_loss_history_{args.steps}steps.pkl"
         with open(loss_file, "wb") as f:
             pickle.dump(loss_hist, f)
-        print(f"[train] saved loss history → {loss_file}")
+        print(f"[train] Saved loss history → {loss_file}")
 
 
 if __name__ == "__main__":

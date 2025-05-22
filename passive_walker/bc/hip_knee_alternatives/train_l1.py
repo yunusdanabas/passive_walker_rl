@@ -10,10 +10,6 @@ Usage:
 """
 
 import argparse
-import numpy as np
-import jax
-import jax.numpy as jnp
-from pathlib import Path
 
 from passive_walker.bc.hip_knee_alternatives import (
     DATA_BC_HIP_KNEE_ALTERNATIVES,
@@ -31,7 +27,7 @@ def main():
         description="Train BC model for hip+knee control using L1 loss"
     )
     p.add_argument(
-        "--steps", type=int, default=20_000,
+        "--steps", type=int, default=50_000,
         help="Number of simulation steps to use for training"
     )
     p.add_argument(
