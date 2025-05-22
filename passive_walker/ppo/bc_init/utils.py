@@ -37,7 +37,7 @@ def save_model(model, model_file: Path):
     eqx.tree_serialise_leaves(model_file, model)
 
 
-def load_model(path: Path,hidden_size=128,input_size=11):
+def load_model(path: Path,hidden_size=256,input_size=11):
     """
     Load model parameters from file.
     

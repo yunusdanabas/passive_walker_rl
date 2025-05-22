@@ -5,7 +5,7 @@ This module handles configuration for Behavior Cloning (BC) seeded PPO algorithm
 It defines paths for data storage and model files, and provides device selection functionality.
 """
 
-from .constants import (
+from passive_walker.constants import (
     ROOT,
     XML_PATH,
     DATA_DIR,
@@ -16,6 +16,10 @@ from .constants import (
     RESULTS_PPO_SCRATCH,
     set_device
 )
+import os
+PPO_DIR = os.path.join(ROOT, "ppo")
+
+
 
 def set_device(use_gpu: bool):
     """
