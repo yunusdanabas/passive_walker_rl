@@ -31,6 +31,9 @@ from passive_walker.constants import (
 DATA_BC_KNEE_MSE = DATA_BC / "knee_mse"
 DATA_BC_KNEE_MSE.mkdir(parents=True, exist_ok=True)
 
+RESULTS_BC_KNEE_MSE = RESULTS_BC / "knee_mse"
+RESULTS_BC_KNEE_MSE.mkdir(parents=True, exist_ok=True)
+
 from pathlib import Path
 import jax
 import equinox as eqx

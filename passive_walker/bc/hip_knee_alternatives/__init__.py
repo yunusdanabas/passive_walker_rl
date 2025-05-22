@@ -38,6 +38,9 @@ from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
 DATA_BC_HIP_KNEE_ALTERNATIVES = DATA_BC / "hip_knee_alternatives"
 DATA_BC_HIP_KNEE_ALTERNATIVES.mkdir(parents=True, exist_ok=True)
 
+RESULTS_BC_HIP_KNEE_ALTERNATIVES = RESULTS_BC / "hip_knee_alternatives"
+RESULTS_BC_HIP_KNEE_ALTERNATIVES.mkdir(parents=True, exist_ok=True)
+
 MODEL_BC_HIP_KNEE_ALTERNATIVES = DATA_BC_HIP_KNEE_ALTERNATIVES / "models"
 MODEL_BC_HIP_KNEE_ALTERNATIVES.mkdir(parents=True, exist_ok=True)
 
@@ -71,7 +74,7 @@ def load_demo_data(demo_file: Path):
     return jnp.array(data["obs"]), jnp.array(data["labels"])
 
 
-def train_model(obs, labels, loss_type="mse", epochs=100, batch_size=32, hidden_size=128, lr=1e-4):
+def train_model(obs, labels, loss_type="mse", epochs=100, batch_size=32, hidden_size=256, lr=3e-4):
     """
     Train a neural network model using behavioral cloning.
 
@@ -144,7 +147,7 @@ def save_model(model, model_file: Path):
     eqx.tree_serialise_leaves(model_file, model)
 
 
-def load_model(path: Path,hidden_size=128,input_size=11):
+def load_model(path: Path,hidden_size=256,input_size=11):
     """
     Load model parameters from file.
     

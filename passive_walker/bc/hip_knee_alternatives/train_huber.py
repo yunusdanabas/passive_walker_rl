@@ -11,13 +11,11 @@ Usage:
 """
 
 import argparse
-import numpy as np
-import jax
-import jax.numpy as jnp
-from pathlib import Path
+import pickle
 
 from passive_walker.bc.hip_knee_alternatives import (
     DATA_BC_HIP_KNEE_ALTERNATIVES,
+    RESULTS_BC_HIP_KNEE_ALTERNATIVES,
     MODEL_BC_HIP_KNEE_ALTERNATIVES,
     load_demo_data,
     set_device,
@@ -32,7 +30,7 @@ def main():
         description="Train BC model for hip+knee control using Huber loss"
     )
     p.add_argument(
-        "--steps", type=int, default=20_000,
+        "--steps", type=int, default=50_000,
         help="Number of simulation steps to use for training"
     )
     p.add_argument(
@@ -42,6 +40,10 @@ def main():
     p.add_argument(
         "--gpu", action="store_true",
         help="Use GPU if available (sets JAX_PLATFORM_NAME=gpu)"
+    )
+    p.add_argument(
+        "--plot", action="store_true",
+        help="Save loss history to file"
     )
     args = p.parse_args()
 
@@ -65,11 +67,19 @@ def main():
 
     # train the model
     print(f"[train] training on {len(obs)} samples…")
-    model = train_model(obs, labels, loss_type="huber")
+    model, loss_history = train_model(obs, labels, loss_type="huber")
 
-    # save the trained model
-    save_model(model, model_file)
-    print(f"[train] saved → {model_file}")
+    # Save model
+    out_file = RESULTS_BC_HIP_KNEE_ALTERNATIVES / f"hip_knee_huber_controller_{args.steps}steps.eqx"
+    save_model(model, out_file)
+    print(f"[train] Saved trained controller → {out_file}")
+
+    # Save loss history
+    if args.plot:
+        loss_file = RESULTS_BC_HIP_KNEE_ALTERNATIVES / f"training_loss_history_huber_{args.steps}steps.pkl"
+        with open(loss_file, "wb") as f:
+            pickle.dump(loss_history, f)
+        print(f"[train] Saved loss history → {loss_file}")
 
 
 if __name__ == "__main__":

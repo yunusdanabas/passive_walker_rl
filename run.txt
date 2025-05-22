@@ -1,0 +1,9 @@
+BC Notebook
+
+python -m passive_walker.bc.hip_mse.run_pipeline --gpu --plot
+
+python -m passive_walker.bc.knee_mse.run_pipeline --gpu --plot
+
+python -m passive_walker.bc.hip_knee_mse.run_pipeline --gpu --plot
+
+python -m passive_walker.bc.hip_knee_alternatives.run_comparison_pipeline --gpu

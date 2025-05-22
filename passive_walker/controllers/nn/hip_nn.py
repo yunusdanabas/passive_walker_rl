@@ -1,17 +1,24 @@
 # passive_walker/controllers/nn/hip_nn.py
-# Neural Network Controller for the hip joint
+"""Neural network controller for hip joint."""
 
 import jax
 import jax.numpy as jnp
 import equinox as eqx
 
-# Define the neural network controller for the hip joint.
 class HipController(eqx.Module):
+    """MLP controller for hip joint."""
+    
     fc1: eqx.nn.Linear
     fc2: eqx.nn.Linear
     fc3: eqx.nn.Linear
 
-    def __init__(self, input_size: int, hidden_size: int = 64, output_size: int = 1, key: "jax.random.PRNGKey" = None):
+    def __init__(
+        self, 
+        input_size: int, 
+        hidden_size: int = 64, 
+        output_size: int = 1, 
+        key: "jax.random.PRNGKey" = None
+    ):
         if key is None:
             key = jax.random.PRNGKey(0)
         k1, k2, k3 = jax.random.split(key, 3)
@@ -20,10 +27,11 @@ class HipController(eqx.Module):
         self.fc3 = eqx.nn.Linear(hidden_size, output_size, key=k3)
 
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        """Forward pass with tanh output in [-1, 1]."""
         x = jax.nn.relu(self.fc1(x))
         x = jax.nn.relu(self.fc2(x))
         x = self.fc3(x)
-        return jnp.tanh(x)  # Bound output to [-1, 1]
+        return jnp.tanh(x)
 
 def main():
     # Assume the observation dimension is 12 (consistent with our environment).

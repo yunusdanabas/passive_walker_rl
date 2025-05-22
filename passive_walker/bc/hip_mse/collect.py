@@ -18,11 +18,9 @@ Usage:
 import argparse
 import numpy as np
 import jax.numpy as jnp
-from pathlib import Path
-import glob
 
-from passive_walker.envs.mujoco_env import PassiveWalkerEnv
-from passive_walker.utils.io import save_pickle, load_pickle
+from passive_walker.envs.mujoco_fsm_env import PassiveWalkerEnv
+from passive_walker.utils.io import save_pickle
 from passive_walker.bc.hip_mse import DATA_BC_HIP_MSE, XML_PATH, set_device
 
 

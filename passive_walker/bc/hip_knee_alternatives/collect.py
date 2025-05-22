@@ -15,7 +15,6 @@ Usage:
 import argparse
 import numpy as np
 import jax.numpy as jnp
-from pathlib import Path
 
 from passive_walker.envs.mujoco_fsm_env import PassiveWalkerEnv
 from passive_walker.utils.io import save_pickle
@@ -55,7 +54,7 @@ def main():
         description="Collect FSM hip+knee demos for BC training"
     )
     p.add_argument(
-        "--steps", type=int, default=20_000,
+        "--steps", type=int, default=50_000,
         help="Number of simulation steps to collect"
     )
     p.add_argument(
