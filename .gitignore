@@ -4,12 +4,12 @@ __pycache__/
 
 # Data & results
 #data/**
-#results/**
+results/**
 #
 ## Model checkpoints & logs
-#*.pkl
-#*.pkl.gz
-#*.msgpack
+*.pkl
+*.pkl.gz
+*.msgpack
 
 # Environment files
 .env
