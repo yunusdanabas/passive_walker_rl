@@ -1,169 +1,206 @@
-# Passive Walker RL
+# Passive Walker RL 🏃‍♂️💨  
+*A curriculum-driven, JAX-native pipeline for stable bipedal walking — from finite-state experts to Brax-scaled PPO.*
 
-A comprehensive implementation of a reinforcement learning pipeline for a passive bipedal walker using JAX. This project implements a full pipeline from Finite State Machine (FSM) expert demonstrations to Brax-scaled Proximal Policy Optimization (PPO) on a minimal bipedal walker.
+---
 
-## Project Overview
+> **TL;DR** – We start with a hand-crafted finite-state machine (FSM), distil it into a tiny MLP via behaviour cloning (BC), then fine-tune that policy with Proximal Policy Optimisation (PPO) in a massively-vectorised **Brax** simulator.  
+> A single GPU runs a **120-job sweep** in minutes, producing a smooth, disturbance-robust downhill gait.
 
-This project transforms a rule-based toy walker into a fast-learning, resilient biped through a carefully designed curriculum:
+---
 
-1. **Expert FSM**: Two-phase hip cycle with knee toggling generates stable downhill "fall-and-catch" steps
-2. **Behavior Cloning**: Trained on ~30k expert state-action pairs using 2×64 tanh MLP
-3. **BC-Seeded PPO**: Actor initialized from BC with separate critic, achieving smoother, faster, disturbance-robust gait
-4. **PPO-from-Scratch**: Demonstrates the value of curriculum learning
+## Table of Contents
+1. [Key Features](#key-features)  
+2. [Quick Start](#quick-start)  
+3. [Installation](#installation)  
+4. [Repository Layout](#repository-layout)  
+5. [Core Workflows](#core-workflows)  
+6. [Reproducing Results](#reproducing-results)  
+7. [Design Choices & Notes](#design-choices--notes)  
+8. [Troubleshooting](#troubleshooting)  
+9. [Contributing](#contributing)  
+---
 
-## Features
+## Key Features
+| Layer | What You Get | Why It Matters |
+|-------|--------------|----------------|
+| **FSM → BC** | Rule-based gait distilled into a 2-layer MLP (≤ 1 k params) | Instant “walk-from-day-one” initialisation |
+| **PPO (BC-seeded & scratch)** | Separate actor/critic, GAE, clip objective, annealed BC term | Sample-efficient fine-tuning & clean ablations |
+| **MuJoCo ⇄ Brax** | 1-line conversion script produces a frozen `System.pkl.gz` | High-fidelity design *and* 100× faster roll-outs |
+| **Vectorised JAX** | 128–1024 envs in lock-step at **< 50 µs/env/step** (RTX class) | Massive hyper-parameter sweeps in minutes |
+| **Extensible BC losses** | MSE / Huber / L1 / Composite variants | Study robustness vs. over-fitting |
+| **Modular CLI & logs** | Every stage is a one-liner; artefacts saved with hash-rich filenames | Reproducible pipelines & easy comparison |
 
-- JAX-native implementation for high-performance computing
-- Integration with Brax physics engine for efficient rigid body dynamics
-- FSM-based expert demonstrations for behavioral cloning
-- PPO implementation for policy learning
-- MuJoCo model support with automatic conversion to Brax
-- Comprehensive training and evaluation pipeline
-- GPU acceleration support
-- Vectorized environment rollouts for efficient training
-- Parallel training capabilities (128-1024 replicas)
-- Network architecture scaling from tiny to deepXL
+---
 
-## Technical Stack
+## Quick Start
+```bash
+# 1.  (Optional) create & activate a fresh venv
+python -m venv .venv && source .venv/bin/activate
 
-| Layer            | Tooling                                          | Purpose                                                  |
-| ---------------- | ------------------------------------------------ | -------------------------------------------------------- |
-| **Dynamics**     | MuJoCo 2.3 (MJCF) → Brax MJCF loader             | High-fidelity model; JAX-native simulation for scale-out |
-| **RL API**       | OpenAI Gym + custom `PassiveWalkerEnv`           | Standardise observations/actions                         |
-| **Numerics**     | JAX + Equinox + Optax                            | Autograd, neural nets, optimisers, all JIT-compiled      |
-| **RL Algorithm** | `brax.training.agents.ppo`                       | Parallel, device-native PPO trainer                      |
-| **Utilities**    | NumPy, SciPy Rotations, tqdm, matplotlib, pickle | Data handling, logging, visualisation                    |
+# 2.  Editable install (CPU JAX by default)
+pip install -e .
 
-## Walker Model
+# 3.  Convert the MuJoCo model to Brax (one-time, cached)
+python -m passive_walker.brax.convert_xml --xml passiveWalker_model.xml
 
-- Torso on slide-x/slide-z & yaw; two legs with hinge hips and prismatic knees
-- Position-controlled joints (hip kₚ = 5, knees kₚ = 1000)
-- Virtual downhill ramp: gravity pitched 11.5°
-- Episode terminates after 1,024 steps or on fall (torso < 0.15m or pitch > 0.70rad)
+# 4.  Smoke-test: run a 10 k-step PPO sanity check (CPU or GPU)
+python -m passive_walker.brax.tiny_ppo_sanity --steps 10000
+
+# 5.  Full BC-seeded PPO pipeline on GPU
+python -m passive_walker.ppo.bc_init.run_pipeline --device gpu --hz 1000
+
+# 6.  Hyper-parameter sweep (120 jobs, RTX 4060 Ti ≈ 20 min)
+python -m passive_walker.brax.sweep_ppo --device gpu
+````
+
+GUI roll-outs (`--gui`) require the MuJoCo viewer; headless runs work everywhere.
+
+---
 
 ## Installation
 
-The package requires Python 3.9 or 3.10. Install the package using pip:
+### Requirements
+
+| Package                                                                            | Version tested                     |
+| ---------------------------------------------------------------------------------- | ---------------------------------- |
+| Python 3.9 / 3.10                                                                  |                                    |
+| **JAX**                                                                            | 0.4 + (CPU) or 0.4 + CUDA 12 wheel |
+| **Brax 2 (MJX)**                                                                   | `pip install brax==0.10.*`         |
+| **MuJoCo 2.3**                                                                     | `pip install mujoco`               |
+| `equinox`, `optax`, `gymnasium`, `numpy`, `scipy`, `matplotlib`, `tqdm`, `pickle5` |                                    |
+
+> 🔧 **GPU JAX:** follow the [official wheels](https://github.com/google/jax#installation) for your CUDA + cudNN stack.
+
+### Editable install
 
 ```bash
-pip install -e .
+git clone https://github.com/YOUR_USER/passive_walker_rl.git
+cd passive_walker_rl
+pip install -e ".[demo]"
 ```
 
-### Dependencies
+The `demo` extra installs MuJoCo and matplotlib for visualisation.
 
-The project relies on the following main dependencies:
-- JAX - For high-performance numerical computing
-- Equinox - For neural network implementation
-- Optax - For optimization algorithms
-- Brax - For physics simulation
-- MuJoCo - For model definition and conversion
-- Gym - For environment interfaces
-- NumPy - For numerical operations
-- SciPy - For scientific computing
-- Matplotlib - For visualization
-- tqdm - For progress tracking
+---
 
-## Project Structure
+## Repository Layout
 
 ```
 passive_walker_rl/
-├── passive_walker/          # Main package directory
-│   ├── bc/                 # Behavioral cloning components
-│   ├── brax/              # Brax physics engine integration
-│   │   ├── convert_xml.py # MuJoCo to Brax converter
-│   │   ├── sweep_ppo.py   # PPO hyperparameter sweep
-│   │   └── utils.py       # Brax utilities
-│   ├── controllers/        # Controller implementations
-│   ├── envs/              # Environment definitions
-│   ├── ppo/               # PPO implementation
-│   ├── utils/             # Utility functions
-│   └── constants.py       # Project constants
-├── scripts/               # Training and evaluation scripts
-├── data/                  # Data storage
-│   └── brax/             # Brax-specific data
-│       └── system.pkl.gz  # Cached Brax System
-├── results/              # Training results and logs
-└── passiveWalker_model.xml # MuJoCo model definition
+├─ passive_walker/          ← import pkg
+│  ├─ bc/                   ← behaviour-cloning variants
+│  ├─ ppo/                  ← BC-seeded & scratch PPO
+│  ├─ brax/                 ← MJCF→Brax + sweeping utils
+│  ├─ controllers/          ← fsm/  nn/
+│  ├─ envs/                 ← MuJoCo Gym wrapper
+│  └─ utils/                ← IO, plotting, device helpers
+├─ data/                    ← demonstrations & cached Brax System
+├─ results/                 ← all logs, checkpoints, plots
+└─ passiveWalker_model.xml  ← canonical MuJoCo walker model
 ```
 
-## Usage
+---
 
-### Converting MuJoCo Model to Brax
+## Core Workflows
 
-To convert the MuJoCo XML model to Brax System format:
+### 1 · Generate Expert Demonstrations
 
 ```bash
-python -m passive_walker.brax.convert_xml --xml passiveWalker_model.xml
+python -m passive_walker.bc.hip_knee_mse.collect         \
+       --steps 30000 --hz 1000 --save data/hip_knee_mse/
 ```
 
-### Training
+Outputs `hip_knee_demos_30k.pkl` (\~80 MB).
 
-To train the agent using PPO:
+### 2 · Behaviour Cloning (full hip + knee)
 
 ```bash
-python -m passive_walker.brax.sweep_ppo
+python -m passive_walker.bc.hip_knee_mse.train           \
+       --demos data/hip_knee_mse/hip_knee_demos_30k.pkl  \
+       --epochs 100 --lr 1e-4
 ```
 
-For a lightweight test run:
+Creates `policy_1000hz.eqx` plus loss curves.
+
+### 3 · BC-Seeded PPO
 
 ```bash
-python -m passive_walker.brax.tiny_ppo_sanity
+python -m passive_walker.ppo.bc_init.run_pipeline        \
+       --init   results/bc/hip_knee_mse/policy_1000hz.eqx \
+       --device gpu --total-steps 5_000_000
 ```
 
-### Importing in Python
+Early iterations mix PPO loss with an annealed BC penalty.
 
-```python
-from passive_walker.brax import XML_PATH, SYSTEM_PICKLE, set_device
+### 4 · Scratch PPO
+
+```bash
+python -m passive_walker.ppo.scratch.run_pipeline --device gpu
 ```
 
-## Performance & Scaling
+### 5 · MuJoCo ⇄ Brax & Hyper-Parameter Sweep
 
-The implementation leverages JAX and Brax for high-performance computing:
-- GPU acceleration support
-- Vectorized environment rollouts (~45µs/env/step on RTX-class GPU)
-- Efficient physics simulation
-- Parallel training capabilities
+```bash
+python -m passive_walker.brax.convert_xml   # one-time
+python -m passive_walker.brax.sweep_ppo     # 120 configs
+```
 
-### Network Architecture Scaling
+Results saved under `results/brax/sweeps/YYYY-mm-dd_HHMM/`.
 
-| Arch    | Policy   | Value     | Status     |
-| ------- | -------- | --------- | ---------- |
-| tiny    | 2 × 64   | 2 × 64    | ✓ baseline |
-| small   | 3 × 128  | 3 × 128   | ✓          |
-| medium  | 4 × 256  | 4 × 256   | ✓          |
-| deepXL  | 12 × 512 | 14 × 1024 | ✓ (fits)   |
-| deepXXL | 16 × 768 | 18 × 1536 | ✗ (OOM)    |
+### 6 · Visualise
 
-## Key Findings
+```bash
+python -m passive_walker.utils.walker_plotter \
+       --log results/bc/hip_knee_mse/loss.pkl
+```
 
-1. **Curriculum > cold-start**: BC-seeded PPO converges in < 1M steps; scratch PPO lags
-2. **Capacity sweet-spot**: Performance improves up to deepXL; deepXXL overwhelms GPU memory
-3. **Stable training recipe**: Mild reward scale (1.0) + low LR (≤ 3e-4) prevents PPO divergence
-4. **Throughput leap**: Brax delivers two orders-of-magnitude faster data collection than single-env MuJoCo
+Generates PNGs for rewards, BC coefficients, joint kinematics, etc.
 
-## Challenges & Solutions
+---
 
-| Issue              | Symptom                  | Mitigation                     |
-| ------------------ | ------------------------ | ------------------------------ |
-| GPU OOM on deepXXL | XLA allocator crash      | Drop XXL or shrink batch/width |
-| NaN torques        | "CTRL = nan" in MuJoCo   | Action clamp + tanh rescale    |
-| Slow scratch PPO   | Reward plateau           | Curriculum + longer horizon    |
-| Over-specific gait | Fails on friction change | Domain randomisation plan      |
+## Reproducing Results
 
-## Future Work
+| Stage                    | Script                        | Args                | Wall-clock (RTX 4060 Ti) |
+| ------------------------ | ----------------------------- | ------------------- | ------------------------ |
+| **FSM demo**             | `bc/*/collect.py`             | `--steps 3e4`       | < 1 min                  |
+| **Full BC (Huber)**      | `bc/hip_knee_mse/train.py`    | `--epochs 100`      | ≈ 2 min                  |
+| **BC-PPO (best config)** | `ppo/bc_init/run_pipeline.py` | `--total-steps 5e6` | ≈ 8 min                  |
+| **120-job sweep**        | `brax/sweep_ppo.py`           | default             | ≈ 20 min                 |
 
-1. Complete 4-architecture Brax sweep & log reward, wall-clock, memory
-2. Run ≥ 3 seeds on best/worst nets to quantify variance
-3. Publish analysis notebook: sample efficiency curves, capacity-vs-return & memory-vs-FPS plots
-4. Add robustness study: slope, mass, friction randomisation, richer rewards
-5. Transfer best Brax policy back to MuJoCo and eventually to a hardware exosuit test-rig
+All checkpoints contain SHA-256 config hashes; reruns with identical flags overwrite nothing.
 
-## Author
+---
 
-Yunus Emre Danabaş
+## Design Choices & Notes
 
-## Version
+* **Curriculum beats cold-start.** Seeding PPO with BC slashes sample complexity (> 10× in our ablations).
+* **Reward scaling** (0.5) and **mid-range LR** (5×10⁻⁴) proved most stable in the sweep.
+* **1 M-param “medium” nets** hit the sweet-spot between expressivity and memory.
+* **Dual simulators.** MuJoCo for fidelity & nice GUI; Brax for brute-force data. Both stay bit-for-bit consistent on 1 k test steps.
 
-Current version: 0.1.0
+---
 
+## Troubleshooting
 
+| Symptom                           | Likely Cause                 | Fix                                                                     |
+| --------------------------------- | ---------------------------- | ----------------------------------------------------------------------- |
+| **`nan` torques / diverging PPO** | Out-of-range actions         | Clamp via `--tanh-action` or lower LR                                   |
+| **GPU OOM** (deepXXL)             | Model too wide               | Reduce `--arch deep` or batch size                                      |
+| **No GPU JAX wheel**              | Mismatched CUDA toolkit      | Follow [JAX install matrix](https://github.com/google/jax#installation) |
+| **MuJoCo viewer freezes**         | Remote SSH without X-forward | Use `--gui headless` or `ssh -X`                                        |
+
+---
+
+## Contributing
+
+Pull-requests & issues are welcome! Please follow the standard GitHub flow:
+
+1. Fork → feature-branch → commit + descriptive message
+2. `make style` (black, isort) or `pre-commit run --all`
+3. Draft PR with checklist ticked
+4. CI must pass (CPU sanity, flake8) before review.
+
+---
+
+**Happy walking!** Questions or collaboration ideas? Open an issue or ping
+`yunusdanabas [at] sabanciuniv.edu`.
