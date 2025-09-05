@@ -32,9 +32,9 @@ class EnvCfg:
 
 
 @dataclass
-class RewardCfg:
-    # keep keys flexible – we'll map presets later
-    params: dict
+class TerminationCfg:
+    fall_z_min: float
+    fall_pitch_max: float
 
 
 @dataclass
@@ -43,4 +43,5 @@ class WalkerConfig:
     env: EnvCfg
     physics: PhysicsCfg
     control: ControlCfg
+    terminations: TerminationCfg
     reward: str  # preset key

@@ -23,4 +23,8 @@ control:
   use_nn_for_hip: false
   use_nn_for_knees: false
 
+terminations:
+  fall_z_min: 0.15
+  fall_pitch_max: 1.0
+
 reward: "default"       # "minimal" | "default" | "aggressive"
