@@ -21,7 +21,15 @@ dependencies = [
   "scipy",
   "tqdm",
   "matplotlib",
+  "mujoco",
+  "torch",
+  "pyyaml",
 ]
+
+[project.scripts]
+walker.collect_fsm = "passive_walker.scripts.collect_fsm_data:main"
+walker.train_bc = "passive_walker.scripts.train_bc:main"
+walker.train_ppo = "passive_walker.scripts.train_ppo:main"
 
 [project.urls]
 "Repository" = "https://github.com/YOUR_USERNAME/passive_walker_rl"
