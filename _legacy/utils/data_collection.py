@@ -9,8 +9,12 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 import json
 
-from passive_walker.envs.mujoco_fsm_env import PassiveWalkerEnv
-from passive_walker.constants import XML_PATH
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
+from envs.mujoco_fsm_env import PassiveWalkerEnv
+from constants import XML_PATH
 
 
 class DataCollector:

@@ -16,15 +16,19 @@ import jax.numpy as jnp
 import logging
 from dataclasses import dataclass
 
-from passive_walker.constants import XML_PATH
-from passive_walker.utils.control import (
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
+from constants import XML_PATH
+from utils.control import (
     denormalize_action,
     compute_pd_control,
     get_joint_ranges,
     get_pd_gains,
     get_ctrl_limits,
 )
-from passive_walker.utils.jax_control import compute_pd_control_jax, compute_reward_jax, quat2euler_zyx_jit
+from utils.jax_control import compute_pd_control_jax, compute_reward_jax, quat2euler_zyx_jit
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -752,7 +756,7 @@ if __name__ == "__main__":
     
     # Test demo mode (FSM for both hip and knees) with GUI.
     if PRINT_ENABLED:
-    print("Testing FSM mode (demo) with GUI:")
+        print("Testing FSM mode (demo) with GUI:")
     
     env_demo = PassiveWalkerEnv(
         xml_path, 
