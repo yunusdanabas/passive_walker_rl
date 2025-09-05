@@ -2,6 +2,15 @@
 
 This document summarizes where each old component will land in the new unified architecture.
 
+## ✅ Migration Status
+
+- [x] **Step 0**: Stabilize + Set Target Skeleton
+- [x] **Step 1**: Implement unified environment (`core/env.py`)
+- [x] **Step 2**: Reward module (presets + tiny API)
+- [x] **Step 3**: JAX utils (pd + quat + batched reward)
+- [x] **Step 4**: Rollout buffer (single + optional multi-env)
+- [x] **Step 5**: Wire-up + Docs + Cleanup
+
 ## Core Components
 
 * `envs/mujoco_env.py` + `envs/mujoco_fsm_env.py` → `core/env.py` (modes via cfg)
@@ -17,6 +26,14 @@ This document summarizes where each old component will land in the new unified a
 * Dataclasses for type safety → `core/config.py`
 * YAML loading utilities → `core/io.py`
 
+## New Training Scripts
+
+* `scripts/train_bc.py` - Behavioral cloning training
+* `scripts/train_ppo.py` - PPO training
+* `configs/fsm_collect.yaml` - FSM data collection config
+* `configs/bc_eval.yaml` - BC evaluation config
+* `configs/ppo_train.yaml` - PPO training config
+
 ## Legacy Code
 
 * Everything else → `_legacy/` (kept for reference)
@@ -27,10 +44,11 @@ This document summarizes where each old component will land in the new unified a
   - `_legacy/bc/` - Behavior cloning modules
   - `_legacy/brax/` - Brax integration
 
-## Migration Steps
+## Step 5 Tasks Completed
 
-1. **Step 1**: Implement `core/env.py` with unified environment
-2. **Step 2**: Implement `core/reward.py` with preset system
-3. **Step 3**: Implement `core/jax_utils.py` with optimized functions
-4. **Step 4**: Implement `core/rollout_buffer.py` with memory pooling
-5. **Step 5**: Implement `scripts/collect_fsm_data.py` for data collection
+- [x] Create `train_bc.py` script for behavioral cloning
+- [x] Create `train_ppo.py` script for PPO training
+- [x] Create workflow configs (fsm_collect, bc_eval, ppo_train)
+- [x] Update README.md with comprehensive quickstart guide
+- [x] Clean up legacy code and ensure no imports from `_legacy/`
+- [x] Run end-to-end tests and final acceptance

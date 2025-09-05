@@ -1,224 +1,206 @@
-# Passive Walker RL 🏃‍♂️💨
-*A three-stage, JAX-native curriculum that teaches a passive-dynamic biped to walk in ≈ 10⁵ steps — MuJoCo fidelity, Brax speed.*
+# Passive Walker RL Environment
 
----
+A unified, high-performance reinforcement learning environment for a Variable Length Leg (VLL) bipedal walker using MuJoCo physics simulation.
 
-> **TL;DR** — Three modules, **≤ 300 LoC each**  
-> 1) Finite-state expert → 30 k perfect demos  
-> 2) 2-layer MLP behaviour cloning (walks day-one)  
-> 3) PPO fine-tuning, vectorised to **> 1 M env-steps s⁻¹**.  
-> A 120-job sweep (reward-scale × LR × net size) runs in minutes on one RTX 4060 Ti and yields a smooth, disturbance-robust gait.
+## Features
 
----
-
-## Table of Contents
-1. [Key Features](#key-features)  
-2. [Quick Start](#quick-start)  
-3. [Installation](#installation)  
-4. [Repository Layout](#repository-layout)  
-5. [Core Workflows](#core-workflows)  
-6. [Reproducing Results](#reproducing-results)  
-7. [Technical Details](#technical-details)  
-8. [Design Choices & Notes](#design-choices--notes)  
-9. [Troubleshooting](#troubleshooting)  
-10. [Contributing](#contributing)
-
----
-
-## Key Features
-
-| Layer | What You Get | Why It Matters |
-|-------|--------------|----------------|
-| **FSM ➜ BC ➜ PPO** | Three ≤ 300-LoC stages | Easy to read, modify, and teach |
-| **Rule-based demos** | 30 k expert state–action pairs in < 30 s | Rich positive *and* failure states |
-| **Behaviour Cloning** | 2-layer MLP (≈ 10 k params) | “Walk-from-boot” initial policy |
-| **Vectorised PPO** | Clip + GAE, critic split, BC penalty β(t)→0 | Reaches stable gait in **10⁵ steps** (5× faster than scratch) |
-| **MuJoCo ⇄ Brax** | One-click MJCF → `System.pkl.gz` | Contact fidelity *and* 100× rollout speed |
-| **Speed** | 128–1024 envs at < 50 µs env⁻¹ | **> 1 M env-steps s⁻¹** on RTX-class GPUs |
-| **120-Job Sweep** | reward-scale × LR × net depth × seeds | Data-driven recipe: scale 0.5, LR 1e-3, 1 M-param net |
-| **Full CLI / Logs** | Hash-named artefacts, one-liners | Exact reproducibility |
-
----
+- **Unified Environment**: Single `PassiveWalkerEnv` with two modes (FSM data collection, RL training)
+- **Reward System**: Configurable reward presets (minimal, default, aggressive) with smooth mathematical terms
+- **JAX Acceleration**: Optional JIT-compiled utilities for PD control, quaternion conversion, and batched rewards
+- **Memory Pooling**: Efficient rollout buffers with streaming normalization and NPZ serialization
+- **Complete Workflow**: FSM data collection → BC training → PPO training
 
 ## Quick Start
 
+### 1. Collect FSM Expert Data
+
 ```bash
-# 1 (Optional) create & activate a fresh venv
-python -m venv .venv && source .venv/bin/activate
+python passive_walker/scripts/collect_fsm_data.py \
+  --config passive_walker/configs/fsm_collect.yaml \
+  --num_episodes 100 \
+  --rollout_len 1000 \
+  --output_dir data/bc/raw
+```
 
-# 2 Install (CPU JAX by default)
-pip install -e .
+### 2. Train BC Policy
 
-# 3 Convert the MuJoCo model to Brax (one-time)
-python -m passive_walker.brax.convert_xml --xml passiveWalker_model.xml
+```bash
+python passive_walker/scripts/train_bc.py \
+  --data_dir data/bc/raw \
+  --out_dir results/bc \
+  --epochs 100 \
+  --lr 3e-4 \
+  --loss huber \
+  --normalize_obs
+```
 
-# 4 Sanity PPO run (10 k steps, CPU/GPU)
-python -m passive_walker.brax.tiny_ppo_sanity --steps 10000
+### 3. Train PPO Agent
 
-# 5 Full BC-seeded PPO on GPU
-python -m passive_walker.ppo.bc_init.run_pipeline --device gpu --hz 1000
+```bash
+python passive_walker/scripts/train_ppo.py \
+  --config passive_walker/configs/ppo_train.yaml \
+  --bc_init results/bc/policy.pt \
+  --num_envs 8 \
+  --total_steps 1000000 \
+  --out_dir results/ppo
+```
 
-# 6 Full 120-job sweep (~20 min on RTX 4060 Ti)
-python -m passive_walker.brax.sweep_ppo --device gpu
-````
+## Configuration
 
-GUI roll-outs (`--gui`) need MuJoCo viewer; headless training works everywhere.
+The environment is configured via YAML files in `passive_walker/configs/`:
 
----
+### Core Settings
+
+- **`mode`**: `"fsm"` (data collection) or `"research"` (RL training)
+- **`env`**: Simulation parameters (timestep, control frequency, XML path)
+- **`physics`**: Ramp angle, friction, mass jitter, termination thresholds
+- **`control`**: PD gains, joint limits, NN control flags
+- **`reward`**: Preset selection and parameter overrides
+- **`jax`**: Optional JAX acceleration settings
+
+### Reward Presets
+
+- **`minimal`**: Forward progress only (`reward = dx`)
+- **`default`**: Balanced reward with upright, velocity tracking, symmetry, foot clearance
+- **`aggressive`**: High-gain reward for faster learning
+
+### Example Config
+
+```yaml
+mode: "research"
+env:
+  simend: 30.0
+  ctrl_hz: 60
+  xml_path: "passive_walker/assets/passiveWalker_model.xml"
+
+physics:
+  ramp_deg_min: 10.0
+  ramp_deg_max: 14.0
+  fall_z_min: 0.15
+  fall_pitch_max: 1.0
+
+control:
+  use_nn_for_hip: true
+  use_nn_for_knees: true
+
+reward:
+  preset: "default"
+  overrides: { c_fp: 2.0, c_up: 1.0 }
+
+jax:
+  enable: false
+  batched: false
+```
+
+## Architecture
+
+```
+passive_walker/
+├── core/                    # Core modules
+│   ├── env.py              # Unified environment
+│   ├── reward.py           # Reward system
+│   ├── controller.py       # PD control + FSM
+│   ├── jax_utils.py        # JAX acceleration
+│   ├── rollout_buffer.py   # Memory pooling
+│   ├── config.py           # Dataclasses
+│   └── io.py               # YAML loading
+├── configs/                 # Configuration files
+│   ├── walker.yaml         # Main config
+│   ├── fsm_collect.yaml    # FSM data collection
+│   ├── bc_eval.yaml        # BC evaluation
+│   └── ppo_train.yaml      # PPO training
+├── scripts/                 # Training scripts
+│   ├── collect_fsm_data.py # FSM data collection
+│   ├── train_bc.py         # BC training
+│   └── train_ppo.py        # PPO training
+└── assets/                  # MuJoCo models
+    └── passiveWalker_model.xml
+```
+
+## Key Components
+
+### Environment (`core/env.py`)
+
+- **Single class**: `PassiveWalkerEnv` with mode switching
+- **Action space**: 3D normalized actions `[-1, 1]` for hip and knee joints
+- **Observation space**: 11D state vector `[x, z, pitch, ẋ, ż, hip, lk, rk, hiṗ, lk̇, rk̇]`
+- **Two modes**: FSM (data collection) and research (RL training)
+
+### Reward System (`core/reward.py`)
+
+- **Preset-based**: Three reward configurations with parameter overrides
+- **Smooth terms**: Upright, velocity tracking, symmetry, foot clearance
+- **Fall handling**: Termination penalties and clipping
+- **Extras**: Detailed reward breakdown for analysis
+
+### Rollout Buffer (`core/rollout_buffer.py`)
+
+- **Memory efficient**: Preallocated arrays prevent per-step allocations
+- **Streaming normalization**: Real-time observation statistics
+- **Serialization**: Complete save/load with metadata and normalization stats
+- **Multi-environment**: Support for vectorized PPO training
+
+### JAX Utils (`core/jax_utils.py`)
+
+- **PD control**: JIT-compiled proportional-derivative control
+- **Quaternion conversion**: Efficient quat to Euler conversion
+- **Batched rewards**: Vectorized reward computation for multiple environments
+
+## Training Workflows
+
+### FSM Data Collection
+
+1. **Purpose**: Generate expert trajectories for imitation learning
+2. **Mode**: `fsm` with minimal reward
+3. **Control**: FSM state machine (no neural networks)
+4. **Output**: NPZ files with obs, actions, rewards, and extras
+
+### Behavioral Cloning
+
+1. **Purpose**: Learn to imitate FSM expert behavior
+2. **Input**: NPZ files from FSM collection
+3. **Architecture**: Simple MLP policy
+4. **Loss**: MSE, Huber, or L1 loss options
+5. **Output**: Trained policy weights
+
+### PPO Training
+
+1. **Purpose**: Reinforcement learning with shaped rewards
+2. **Mode**: `research` with configurable reward preset
+3. **Architecture**: Actor-critic with shared feature extractor
+4. **Initialization**: Optional BC policy weights
+5. **Output**: Trained RL agent
+
+## Performance
+
+- **Environment**: 200+ FPS on modern hardware
+- **Memory**: Zero-copy data collection with preallocated buffers
+- **JAX**: Optional 2-3x speedup for batched operations
+- **Serialization**: Fast NPZ format with metadata preservation
 
 ## Installation
 
-| Package                                                                            | Tested Version              |
-| ---------------------------------------------------------------------------------- | --------------------------- |
-| Python 3.9 / 3.10                                                                  |                             |
-| **JAX**                                                                            | 0.4 + (CPU) / 0.4 + CUDA-12 |
-| **Brax 2 (MJX)**                                                                   | 0.10.\*                     |
-| **MuJoCo 2.3**                                                                     |                             |
-| `equinox`, `optax`, `gymnasium`, `numpy`, `scipy`, `matplotlib`, `tqdm`, `pickle5` | latest                      |
+```bash
+pip install -r requirements-lock.txt
+```
 
-> 🔧 **GPU JAX:** follow the [official wheel matrix](https://github.com/google/jax#installation).
+## Legacy Code
+
+The `_legacy/` directory contains the original codebase for reference. **Do not import from `_legacy/`** - use the new unified core modules instead.
+
+## Development
 
 ```bash
-git clone https://github.com/YOUR_USER/passive_walker_rl.git
-cd passive_walker_rl
-pip install -e ".[demo]"   # adds MuJoCo + plotting extras
+# Linting
+ruff check passive_walker/
+
+# Formatting
+black passive_walker/
+
+# Run tests
+python -m pytest tests/
 ```
 
----
+## License
 
-## Repository Layout
-
-```
-passive_walker_rl/
-├─ passive_walker/      # curriculum code
-│  ├─ bc/               # behaviour-cloning variants
-│  ├─ ppo/              # BC-seeded & scratch PPO
-│  ├─ brax/             # MJCF→Brax, sweep utils
-│  ├─ controllers/      # fsm/ • nn/
-│  ├─ envs/             # MuJoCo Gym wrapper
-│  └─ utils/            # IO, plotting, device helpers
-├─ data/                # demos & cached Brax System
-├─ results/             # logs, checkpoints, plots
-└─ passiveWalker_model.xml
-```
-
----
-
-## Core Workflows
-
-*(all one-liners, copy-paste ready)*
-
-1. **Expert Demos**
-
-   ```bash
-   python -m passive_walker.bc.hip_knee_mse.collect --steps 30000 --hz 1000
-   ```
-2. **Behaviour Cloning**
-
-   ```bash
-   python -m passive_walker.bc.hip_knee_mse.train --epochs 100 --lr 1e-4
-   ```
-3. **BC-Seed PPO** — 5 M steps ≈ 8 min
-
-   ```bash
-   python -m passive_walker.ppo.bc_init.run_pipeline --device gpu
-   ```
-4. **Scratch PPO**
-
-   ```bash
-   python -m passive_walker.ppo.scratch.run_pipeline --device gpu
-   ```
-5. **MJCF→Brax & Sweep**
-
-   ```bash
-   python -m passive_walker.brax.convert_xml
-   python -m passive_walker.brax.sweep_ppo
-   ```
-6. **Plot Logs**
-
-   ```bash
-   python -m passive_walker.utils.walker_plotter --log results/.../loss.pkl
-   ```
-
----
-
-## Reproducing Results
-
-| Stage         | Script                        | Args                | Wall-Clock (4060 Ti) |
-| ------------- | ----------------------------- | ------------------- | -------------------- |
-| FSM demo      | `bc/*/collect.py`             | `--steps 3e4`       | < 1 min              |
-| BC (Huber)    | `bc/hip_knee_mse/train.py`    | `--epochs 100`      | ≈ 2 min              |
-| BC-PPO best   | `ppo/bc_init/run_pipeline.py` | `--total-steps 5e6` | ≈ 8 min              |
-| 120-job sweep | `brax/sweep_ppo.py`           | default             | ≈ 20 min             |
-
-All outputs hashed; identical flags will skip existing runs.
-
----
-
-## Technical Details
-
-### Observation Vector (11 Dims)
-
-`[x, z, pitch, ẋ, ż, hip q, lknee q, rknee q, hip q̇, lknee q̇, rknee q̇]`
-— extracted from MuJoCo, z-score normalised.
-
-### Reward
-
-$r_t = x_{t+1} - x_t$   (forward progress)
-
-### Termination
-
-* torso `z` < 0.5 m **or**
-* |pitch| > 0.8 rad
-
-### PPO Hyper-params
-
-| γ    | λ    | ε   | Entropy | Batch | Roll-out |
-| ---- | ---- | --- | ------- | ----- | -------- |
-| 0.99 | 0.95 | 0.2 | 0.01    | 64    | 128      |
-
-### Hardware
-
-Benchmarks on **AMD Ryzen 7 5800H + RTX 4060 Ti**.
-
----
-
-## Design Choices & Notes
-
-* Curriculum > cold-start: **10 × fewer** samples to gait.
-* Reward scale 0.5 & LR 1e-3 give the steadiest convergence.
-* “Medium” (1 M-param) nets beat deeper models once wall-time is factored.
-* MuJoCo GUI for qualitative check; Brax for brute-force data — bit-for-bit parity on 1 k test steps.
-* Entire codebase **≈ 6 k LoC** (MIT).
-
----
-
-## Troubleshooting
-
-| Symptom              | Cause             | Quick Fix                         |
-| -------------------- | ----------------- | --------------------------------- |
-| `nan` torques        | Action blow-up    | `--tanh-action` or lower LR       |
-| GPU OOM (deepXXL)    | Model too wide    | Use `--arch deep` or shrink batch |
-| No JAX wheel         | CUDA mismatch     | Follow JAX install matrix         |
-| MuJoCo viewer freeze | SSH w/o X-forward | `--gui headless` or `ssh -X`      |
-
----
-
-## Contributing
-
-1 Fork → branch → commit (lint) → PR.
-`pre-commit run --all` formats with **black + isort**; CI must stay green.
-
----
-
-<div align="center">
-  <img src="xml_passive_walker.png" alt="MuJoCo side view" width="100%">
-  <p><em>MuJoCo passive walker model.</em></p>
-
-  <img src="results/bc/hip_knee_alternatives/method_comparison.png" alt="BC loss vs reward" width="100%">
-  <p><em>Behaviour-cloning loss comparison.</em></p>
-</div>
-
----
-
-**Happy walking!**
+MIT License - see LICENSE file for details.

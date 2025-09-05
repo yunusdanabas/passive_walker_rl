@@ -1,0 +1,23 @@
+{
+  "total_episodes_attempted": 2,
+  "episodes_collected": 2,
+  "collection_rate": 1.0,
+  "min_quality_threshold": -10.0,
+  "rollout_len": 50,
+  "episode_metrics": [
+    {
+      "episode_id": 1,
+      "total_reward": -4.644844867119249,
+      "steps": 45,
+      "fell": true,
+      "final_x": 0.03887668295560143
+    },
+    {
+      "episode_id": 2,
+      "total_reward": -4.644844867119249,
+      "steps": 45,
+      "fell": true,
+      "final_x": 0.03887668295560143
+    }
+  ]
+}

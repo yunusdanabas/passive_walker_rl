@@ -35,6 +35,7 @@ RESULTS_PPO_BC.mkdir(parents=True, exist_ok=True)
 RESULTS_PPO_SCRATCH = ROOT / "results" / "ppo" / "scratch"
 RESULTS_PPO_SCRATCH.mkdir(parents=True, exist_ok=True)
 
+
 def set_device(use_gpu: bool):
     """
     Select JAX CPU vs GPU backend.
