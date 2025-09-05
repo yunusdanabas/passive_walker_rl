@@ -30,3 +30,7 @@ terminations:
 reward:
   preset: "default"     # "minimal" | "default" | "aggressive"
   overrides: {}         # e.g., { c_ac: 0.0002, vx_star: 1.0 }
+
+jax:
+  enable: false         # use JAX paths where available
+  batched: false        # if true, expect vectorized signals/actions in callers

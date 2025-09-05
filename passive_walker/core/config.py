@@ -44,6 +44,12 @@ class RewardCfg:
 
 
 @dataclass
+class JaxCfg:
+    enable: bool = False
+    batched: bool = False
+
+
+@dataclass
 class WalkerConfig:
     mode: str  # "fsm" | "research"
     env: EnvCfg
@@ -51,3 +57,4 @@ class WalkerConfig:
     control: ControlCfg
     terminations: TerminationCfg
     reward: RewardCfg
+    jax: JaxCfg = JaxCfg()
