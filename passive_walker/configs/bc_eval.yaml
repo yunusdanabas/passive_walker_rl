@@ -1,0 +1,36 @@
+mode: "research"       # Research mode for BC evaluation
+
+env:
+  simend: 30.0
+  ctrl_hz: 60
+  xml_path: "passive_walker/assets/passiveWalker_model.xml"
+  randomize_physics: false
+
+physics:
+  ramp_deg_min: 10.0
+  ramp_deg_max: 14.0
+  friction: [0.8, 1.0]
+  mass_jitter: 0.05
+  fall_z_min: 0.15
+  fall_pitch_max: 1.0
+
+control:
+  kp: [5.0, 1000.0, 1000.0]
+  kv: [1.0, 100.0, 100.0]
+  umin: [-50.0, -800.0, -800.0]
+  umax: [50.0, 800.0, 800.0]
+  joint_ranges: [[-0.5, 0.5], [-0.5, 0.5], [-0.5, 0.5]]
+  use_nn_for_hip: true   # Use NN for all joints in research mode
+  use_nn_for_knees: true
+
+terminations:
+  fall_z_min: 0.15
+  fall_pitch_max: 1.0
+
+reward:
+  preset: "minimal"     # Minimal reward for BC evaluation
+  overrides: {}
+
+jax:
+  enable: false         # Not needed for BC evaluation
+  batched: false
