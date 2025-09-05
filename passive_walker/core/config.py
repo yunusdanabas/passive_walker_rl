@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Tuple, List
+from typing import Tuple
 
 
 @dataclass
@@ -39,8 +39,8 @@ class RewardCfg:
 
 @dataclass
 class WalkerConfig:
-    mode: str               # "fsm" | "research"
+    mode: str  # "fsm" | "research"
     env: EnvCfg
     physics: PhysicsCfg
     control: ControlCfg
-    reward: str             # preset key
+    reward: str  # preset key

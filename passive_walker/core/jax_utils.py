@@ -4,4 +4,5 @@ JAX helpers:
 - quat2euler_zyx (jit)
 - vmap-batched reward
 """
+
 # TODO: paste optimized versions later (Step 3)
