@@ -38,10 +38,16 @@ class TerminationCfg:
 
 
 @dataclass
+class RewardCfg:
+    preset: str  # "minimal" | "default" | "aggressive"
+    overrides: dict = None  # optional parameter overrides
+
+
+@dataclass
 class WalkerConfig:
     mode: str  # "fsm" | "research"
     env: EnvCfg
     physics: PhysicsCfg
     control: ControlCfg
     terminations: TerminationCfg
-    reward: str  # preset key
+    reward: RewardCfg

@@ -54,7 +54,10 @@ class PassiveWalkerEnv(gym.Env):
         self.fsm = FSMStateMachine()  # lightweight: only stores state; uses sim data to transition
 
         # ---- Reward (preset chosen in YAML: minimal/default/aggressive)
-        self.reward_fn = get_reward_fn(cfg.reward)
+        if cfg.mode == "fsm":
+            self.reward_fn = get_reward_fn("minimal")
+        else:  # research mode
+            self.reward_fn = get_reward_fn(cfg.reward.preset, cfg.reward.overrides)
 
         # ---- Preallocated scratch (avoid per-step allocs)
         self._obs = np.empty(_OBS_DIM, dtype=np.float32)
@@ -209,37 +212,32 @@ class PassiveWalkerEnv(gym.Env):
         torso_z = float(self.data.xpos[self.b_torso, 2])
         vx = float(self.data.qvel[self.dof_x])
 
-        if self.cfg.mode == "fsm":
-            # Minimal reward: forward progress only
-            reward = dx
-            fell = (pitch_abs > self.cfg.terminations.fall_pitch_max) or (
-                torso_z < self.cfg.terminations.fall_z_min
-            )
-        else:  # research
-            reward = self.reward_fn(
-                dx=dx,
-                pitch_abs=pitch_abs,
-                u_abs_sum=ctrl_abs_sum,
-                vx=vx,
-                lk_q=float(self.data.qpos[self.qpos_lk]),
-                rk_q=float(self.data.qpos[self.qpos_rk]),
-                left_foot_z=left_z,
-                right_foot_z=right_z,
-                torso_z=torso_z,
-            )
-            fell = (pitch_abs > self.cfg.terminations.fall_pitch_max) or (
-                torso_z < self.cfg.terminations.fall_z_min
-            )
+        # Build signals dict for reward function
+        signals = {
+            "dx": dx,
+            "pitch_abs": pitch_abs,
+            "u_abs_sum": ctrl_abs_sum,
+            "torso_z": torso_z,
+            "vx": vx,
+            "lk_q": float(self.data.qpos[self.qpos_lk]),
+            "rk_q": float(self.data.qpos[self.qpos_rk]),
+            "left_foot_z": left_z,
+            "right_foot_z": right_z,
+        }
+
+        # Compute reward and extract fell status
+        reward, rinfo = self.reward_fn(signals)
+        fell = rinfo["fell"]
 
         done = fell or (self.data.time >= self.simend)
         info = {
             "time": self.data.time,
-            "fell": fell,
             "dx": dx,
             "pitch_abs": pitch_abs,
             "torso_z": torso_z,
             "vx": vx,
         }
+        info.update(rinfo)  # Add reward breakdown
         return self._get_obs(), float(reward), bool(done), info
 
     # -------------------------- Render / Close --------------------------------------
