@@ -11,10 +11,10 @@ import equinox as eqx
 import jax
 
 # Root directory of the project
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 
 # Path to your MuJoCo XML
-XML_PATH = ROOT / "models" / "passiveWalker_model.xml"
+XML_PATH = ROOT / "passive_walker" / "assets" / "passiveWalker_model.xml"
 
 # BC-related paths
 BC_DATA = ROOT / "data" / "bc"

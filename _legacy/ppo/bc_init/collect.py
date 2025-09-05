@@ -7,8 +7,8 @@ Saves trajectories to a pickle file for later use in training.
 import argparse
 import pickle
 
-from passive_walker.ppo.bc_init import XML_PATH, BC_RESULTS, PPO_BC_DATA, set_device
-from passive_walker.ppo.bc_init.utils import initialize_policy, collect_trajectories
+from ..bc_init import XML_PATH, BC_RESULTS, PPO_BC_DATA, set_device
+from ..bc_init.utils import initialize_policy, collect_trajectories
 
 # Default paths and parameters
 DEFAULT_BC_MODEL = str(BC_RESULTS / "hip_knee_mse" / "hip_knee_mse_controller_20000steps.eqx")

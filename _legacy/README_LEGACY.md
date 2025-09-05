@@ -1,4 +1,4 @@
-# Legacy Code
+# Legacy Passive Walker RL Environment
 
 This directory contains the original codebase that has been migrated to the new unified core architecture.
 
@@ -6,9 +6,25 @@ This directory contains the original codebase that has been migrated to the new 
 
 This code is **frozen** and should not be modified. It is kept for reference only.
 
-## Migration
+## Installation
 
-See `MIGRATION.md` in the root directory for the complete mapping of old components to new ones.
+To use the legacy environment independently:
+
+```bash
+cd _legacy
+pip install -r requirements.txt
+pip install -e .
+```
+
+## Quick Start
+
+```bash
+# Test that everything works
+python test_legacy.py
+
+# Run examples
+python example_usage.py
+```
 
 ## What's Here
 
@@ -20,6 +36,65 @@ See `MIGRATION.md` in the root directory for the complete mapping of old compone
 - `brax/` - Brax integration code
 - `mujoco_*_oldCode.py` - Old code files
 
+## Usage Examples
+
+### FSM Environment
+```python
+from envs.mujoco_fsm_env import MuJoCoFSMEnv
+
+env = MuJoCoFSMEnv(use_gui=False)
+obs, info = env.reset()
+
+for _ in range(100):
+    action = np.zeros(3)  # FSM overrides actions
+    obs, reward, done, info = env.step(action)
+    if done:
+        break
+
+env.close()
+```
+
+### Research Environment
+```python
+from envs.mujoco_env import MuJoCoEnv, WalkerCfg
+
+cfg = WalkerCfg()
+env = MuJoCoEnv(cfg, use_gui=False)
+obs, info = env.reset()
+
+for _ in range(100):
+    action = np.random.uniform(-1, 1, 3)
+    obs, reward, done, info = env.step(action)
+    if done:
+        break
+
+env.close()
+```
+
+### Control Utilities
+```python
+from utils.control import denormalize_action, compute_pd_control
+from utils.smooth_rewards import get_reward_fn
+
+# Action denormalization
+action_norm = np.array([0.5, -0.3, 0.8])
+action_denorm = denormalize_action(action_norm)
+
+# PD control
+q = np.array([0.1, 0.2, 0.3])
+qd = np.array([0.01, 0.02, 0.03])
+q_des = np.array([0.0, 0.0, 0.0])
+u = compute_pd_control(q, qd, q_des)
+
+# Reward calculation
+reward_fn = get_reward_fn("default")
+reward, extras = reward_fn(signals)
+```
+
+## Migration
+
+See `MIGRATION.md` in the root directory for the complete mapping of old components to new ones.
+
 ## New Architecture
 
 All functionality has been migrated to the new unified core:
@@ -30,15 +105,15 @@ All functionality has been migrated to the new unified core:
 - **Rollout Buffer**: `passive_walker/core/rollout_buffer.py`
 - **Training Scripts**: `passive_walker/scripts/`
 
-## Usage
+## For New Development
 
-**Do not import from this directory.** Use the new core modules instead:
+**Use the new core modules instead of this legacy code:**
 
 ```python
-# OLD (don't use)
+# OLD (legacy - don't use for new development)
 from passive_walker.envs.mujoco_env import MuJoCoEnv
 
-# NEW (use this)
+# NEW (use this for new development)
 from passive_walker.core.env import PassiveWalkerEnv
 ```
 

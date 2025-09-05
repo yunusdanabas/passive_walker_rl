@@ -13,15 +13,19 @@ import mujoco
 from mujoco.glfw import glfw
 import jax.numpy as jnp
 
-from passive_walker.constants import XML_PATH
-from passive_walker.utils.control import (
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
+from constants import XML_PATH
+from utils.control import (
     denormalize_action,
     compute_pd_control,
     get_joint_ranges,
     get_pd_gains,
     get_ctrl_limits,
 )
-from passive_walker.utils.jax_control import compute_pd_control_jax, compute_reward_jax, quat2euler_zyx_jit
+from utils.jax_control import compute_pd_control_jax, compute_reward_jax, quat2euler_zyx_jit
 
 # ============================================================================
 # Constants
