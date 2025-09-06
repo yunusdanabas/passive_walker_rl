@@ -1,0 +1,4 @@
+[console_scripts]
+walker-collect-fsm = passive_walker.scripts.collect_fsm_data:main
+walker-train-bc = passive_walker.scripts.train_bc:main
+walker-train-ppo = passive_walker.scripts.train_ppo:main

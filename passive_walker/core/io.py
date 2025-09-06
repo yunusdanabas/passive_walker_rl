@@ -1,5 +1,5 @@
 import yaml
-from .config import WalkerConfig, EnvCfg, PhysicsCfg, ControlCfg, TerminationCfg, RewardCfg, JaxCfg
+from .config import WalkerConfig, EnvCfg, PhysicsCfg, ControlCfg, TerminationCfg, RewardCfg, FsmCfg, RenderCfg, DebugCfg, JaxCfg
 
 
 def load_yaml(path: str) -> dict:
@@ -16,6 +16,9 @@ def load_walker_config(cfg_path: str) -> WalkerConfig:
         control=ControlCfg(**raw["control"]),
         terminations=TerminationCfg(**raw["terminations"]),
         reward=RewardCfg(**raw["reward"]),
+        fsm=FsmCfg(**raw.get("fsm", {})),
+        render=RenderCfg(**raw.get("render", {})),
+        debug=DebugCfg(**raw.get("debug", {})),
         jax=JaxCfg(**raw.get("jax", {})),
     )
 

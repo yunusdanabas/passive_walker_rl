@@ -8,5 +8,4 @@ scipy
 tqdm
 matplotlib
 mujoco
-torch
 pyyaml
