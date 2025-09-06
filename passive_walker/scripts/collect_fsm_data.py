@@ -101,10 +101,12 @@ def main():
     collected_episodes = 0
     total_episodes = 0
     all_metrics = []
+    rejected_count = 0
 
     print(f"Collecting {args.num_episodes} episodes...")
     print(f"Output directory: {args.output_dir}")
     print(f"Minimum quality threshold: {args.min_quality}")
+    print("Progress: [", end="", flush=True)
 
     try:
         while collected_episodes < args.num_episodes:
@@ -123,28 +125,24 @@ def main():
                 buffer.save_npz(episode_file)
 
                 collected_episodes += 1
-
-                print(
-                    f"Episode {total_episodes:4d}: "
-                    f"reward={metrics['total_reward']:6.2f}, "
-                    f"steps={metrics['steps']:4d}, "
-                    f"fell={metrics['fell']}, "
-                    f"saved as {os.path.basename(episode_file)}"
-                )
+                print("✓", end="", flush=True)  # Show progress
             else:
-                print(
-                    f"Episode {total_episodes:4d}: "
-                    f"reward={metrics['total_reward']:6.2f}, "
-                    f"steps={metrics['steps']:4d}, "
-                    f"fell={metrics['fell']}, "
-                    f"rejected (below threshold)"
-                )
+                rejected_count += 1
+                print(".", end="", flush=True)  # Show rejected episodes as dots
+
+            # Print progress every 10 episodes
+            if total_episodes % 10 == 0:
+                print(f"] {collected_episodes}/{args.num_episodes} collected, {rejected_count} rejected", flush=True)
+                print("Progress: [", end="", flush=True)
 
     except KeyboardInterrupt:
         print("\nCollection interrupted by user")
 
     finally:
         env.close()
+
+    # Print final progress line
+    print(f"] {collected_episodes}/{args.num_episodes} collected, {rejected_count} rejected")
 
     # Save collection summary
     summary_file = os.path.join(args.output_dir, "collection_summary.json")
@@ -160,11 +158,10 @@ def main():
     with open(summary_file, "w") as f:
         json.dump(summary, f, indent=2)
 
-    print("\nCollection complete!")
-    print(f"Total episodes attempted: {total_episodes}")
-    print(f"Episodes collected: {collected_episodes}")
-    print(f"Collection rate: {collected_episodes / max(1, total_episodes):.2%}")
-    print(f"Summary saved to: {summary_file}")
+    print(f"\n✅ Collection complete!")
+    print(f"📊 Episodes collected: {collected_episodes}/{total_episodes} ({collected_episodes / max(1, total_episodes):.1%})")
+    print(f"📁 Data saved to: {args.output_dir}")
+    print(f"📋 Summary: {summary_file}")
 
 
 if __name__ == "__main__":
