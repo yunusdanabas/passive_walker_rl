@@ -1,0 +1,11 @@
+jax
+equinox
+optax
+brax
+gym
+numpy
+scipy
+tqdm
+matplotlib
+mujoco
+pyyaml

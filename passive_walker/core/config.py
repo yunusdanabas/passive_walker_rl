@@ -10,6 +10,7 @@ class PhysicsCfg:
     mass_jitter: float
     fall_z_min: float
     fall_pitch_max: float
+    randomize_physics: bool = False
 
 
 @dataclass
@@ -35,12 +36,38 @@ class EnvCfg:
 class TerminationCfg:
     fall_z_min: float
     fall_pitch_max: float
+    max_idle_speed: float = 0.1
+    enable_stall_termination: bool = False
 
 
 @dataclass
 class RewardCfg:
     preset: str  # "minimal" | "default" | "aggressive"
     overrides: dict = None  # optional parameter overrides
+
+
+@dataclass
+class FsmCfg:
+    contact_height: float = 0.02
+    knee_release_threshold: float = 0.01
+    hip_swing_pos: float = 0.3
+    hip_swing_neg: float = -0.3
+    knee_stance: float = 0.0
+    knee_retract: float = 0.2
+
+
+@dataclass
+class RenderCfg:
+    camera_distance: float = 3.0
+    rgb_array_width: int = 640
+    rgb_array_height: int = 480
+
+
+@dataclass
+class DebugCfg:
+    log_quality: bool = False
+    log_fsm: bool = False
+    verbose_info: bool = False
 
 
 @dataclass
@@ -57,4 +84,7 @@ class WalkerConfig:
     control: ControlCfg
     terminations: TerminationCfg
     reward: RewardCfg
+    fsm: FsmCfg = FsmCfg()
+    render: RenderCfg = RenderCfg()
+    debug: DebugCfg = DebugCfg()
     jax: JaxCfg = JaxCfg()

@@ -444,10 +444,6 @@ class PassiveWalkerEnv(gym.Env):
         
         return ob
 
-    # Note: Legacy FSM controller methods (controller_fsm_hip, controller_fsm_knees) 
-    # have been moved to passive_walker/controllers/legacy_fsm.py for reference.
-    # The current architecture uses _update_fsm_*_state() methods for state management
-    # and _apply_pd_control() for control application.
     
     def _update_fsm_hip_state(self):
         """

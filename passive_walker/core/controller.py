@@ -28,7 +28,9 @@ class PDController:
 
 
 class FSMStateMachine:
-    def __init__(self):
+    def __init__(self, fsm_cfg):
+        self.cfg = fsm_cfg
+        
         # FSM states
         self.hip_state = 0  # 0: left leg swing, 1: right leg swing
         self.knee_states = [0, 0]  # 0: stance (extended), 1: swing (retracted)
@@ -37,7 +39,7 @@ class FSMStateMachine:
         self.hip_timer = 0.0
         self.knee_timers = [0.0, 0.0]
 
-        # Parameters (simplified)
+        # Parameters from config
         self.hip_period = 1.0  # seconds
         self.knee_period = 0.5  # seconds
         self.knee_retract_time = 0.1  # seconds to retract
@@ -74,12 +76,12 @@ class FSMStateMachine:
     def desired_hip(self) -> float:
         """Return desired hip angle based on FSM state."""
         if self.hip_state == 0:  # Left leg swing
-            return -0.3  # Swing forward
+            return self.cfg.hip_swing_neg  # Swing forward
         else:  # Right leg swing
-            return 0.3  # Swing forward
+            return self.cfg.hip_swing_pos  # Swing forward
 
     def desired_knees(self) -> Tuple[float, float]:
         """Return desired knee positions based on FSM state."""
-        lk_des = 0.0 if self.knee_states[0] == 0 else -0.2  # Stance: extended, Swing: retracted
-        rk_des = 0.0 if self.knee_states[1] == 0 else -0.2
+        lk_des = self.cfg.knee_stance if self.knee_states[0] == 0 else self.cfg.knee_retract
+        rk_des = self.cfg.knee_stance if self.knee_states[1] == 0 else self.cfg.knee_retract
         return lk_des, rk_des
