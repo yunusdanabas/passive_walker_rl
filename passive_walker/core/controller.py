@@ -1,7 +1,7 @@
 """
-Controller API:
-- PDController: computes torques given (q, qd, q_des) & gains/limits.
-- FSMStateMachine: provides q_des for hip/knee in "fsm" mode; bypassed in "research".
+Controller modules for the passive walker.
+
+Provides PD control and FSM-based state machine for generating desired joint positions.
 """
 
 import numpy as np
@@ -9,7 +9,10 @@ from typing import Tuple
 
 
 class PDController:
+    """Proportional-Derivative controller for joint actuation."""
+
     def __init__(self, control_cfg):
+        """Initialize PD controller with gains and limits."""
         self.kp = np.array(control_cfg.kp, dtype=np.float32)
         self.kv = np.array(control_cfg.kv, dtype=np.float32)
         self.umin = np.array(control_cfg.umin, dtype=np.float32)
@@ -28,23 +31,25 @@ class PDController:
 
 
 class FSMStateMachine:
-    def __init__(self, fsm_cfg):
-        self.cfg = fsm_cfg
-        
-        # FSM states
+    """Finite State Machine for generating walking gaits."""
+
+    def __init__(self):
+        """Initialize FSM with default parameters."""
+        # State variables
         self.hip_state = 0  # 0: left leg swing, 1: right leg swing
         self.knee_states = [0, 0]  # 0: stance (extended), 1: swing (retracted)
 
-        # Timing
+        # Timing variables
         self.hip_timer = 0.0
         self.knee_timers = [0.0, 0.0]
 
-        # Parameters from config
+        # Gait parameters
         self.hip_period = 1.0  # seconds
         self.knee_period = 0.5  # seconds
         self.knee_retract_time = 0.1  # seconds to retract
 
     def reset(self):
+        """Reset FSM to initial state."""
         self.hip_state = 0
         self.knee_states = [0, 0]
         self.hip_timer = 0.0
@@ -57,12 +62,12 @@ class FSMStateMachine:
         self.knee_timers[0] += dt
         self.knee_timers[1] += dt
 
-        # Hip state machine (alternating legs)
+        # Hip state machine: alternate between legs
         if self.hip_timer >= self.hip_period:
             self.hip_state = 1 - self.hip_state
             self.hip_timer = 0.0
 
-        # Knee state machine (stance/swing based on hip)
+        # Knee state machine: stance/swing based on hip state
         for i in range(2):
             if self.hip_state == i:  # This leg is swinging
                 if self.knee_states[i] == 0:  # Currently in stance
@@ -76,12 +81,12 @@ class FSMStateMachine:
     def desired_hip(self) -> float:
         """Return desired hip angle based on FSM state."""
         if self.hip_state == 0:  # Left leg swing
-            return self.cfg.hip_swing_neg  # Swing forward
+            return -0.3  # Swing forward
         else:  # Right leg swing
-            return self.cfg.hip_swing_pos  # Swing forward
+            return 0.3  # Swing forward
 
     def desired_knees(self) -> Tuple[float, float]:
         """Return desired knee positions based on FSM state."""
-        lk_des = self.cfg.knee_stance if self.knee_states[0] == 0 else self.cfg.knee_retract
-        rk_des = self.cfg.knee_stance if self.knee_states[1] == 0 else self.cfg.knee_retract
+        lk_des = 0.0 if self.knee_states[0] == 0 else -0.2  # Stance: extended, Swing: retracted
+        rk_des = 0.0 if self.knee_states[1] == 0 else -0.2
         return lk_des, rk_des

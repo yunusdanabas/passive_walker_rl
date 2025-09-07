@@ -180,7 +180,7 @@ passive_walker/
 
 ## Installation
 
-```bash
+   ```bash
 pip install -r requirements-lock.txt
 ```
 
@@ -190,7 +190,7 @@ The `_legacy/` directory contains the original codebase for reference. **Do not 
 
 ## Development
 
-```bash
+   ```bash
 # Linting
 ruff check passive_walker/
 
