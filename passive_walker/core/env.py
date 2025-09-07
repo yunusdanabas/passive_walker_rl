@@ -290,3 +290,99 @@ class PassiveWalkerEnv(gym.Env):
             glfw.destroy_window(self.window)
             glfw.terminate()
             self.window = None
+
+
+if __name__ == "__main__":
+    # Quick FSM demo runner for manual inspection / debugging.
+    import argparse
+    import time
+    import numpy as np
+
+    from .io import load_walker_config
+
+    parser = argparse.ArgumentParser(description="PassiveWalkerEnv demo runner")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="passive_walker/configs/walker.yaml",
+        help="Path to walker YAML config",
+    )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="fsm",
+        choices=["fsm", "research"],
+        help="Environment mode",
+    )
+    parser.add_argument(
+        "--seconds", type=float, default=20.0, help="Sim time limit (s)"
+    )
+    parser.add_argument(
+        "--gui", dest="gui", action="store_true", help="Enable GUI (default)"
+    )
+    parser.add_argument(
+        "--no-gui", dest="gui", action="store_false", help="Disable GUI"
+    )
+    parser.set_defaults(gui=True)
+    parser.add_argument("--seed", type=int, default=None, help="Seed for reset()")
+    # Optional: let NN override FSM for quick checks
+    parser.add_argument("--nn-hip", action="store_true", help="Use NN action for hip")
+    parser.add_argument(
+        "--nn-knees", action="store_true", help="Use NN actions for knees"
+    )
+    parser.add_argument(
+        "--print-interval",
+        type=float,
+        default=0.5,
+        help="Telemetry print interval (s)",
+    )
+
+    args = parser.parse_args()
+
+    # Load and tweak config
+    cfg = load_walker_config(args.config)
+    cfg.mode = args.mode
+    cfg.env.simend = float(args.seconds)
+    cfg.control.use_nn_for_hip = bool(args.nn_hip)
+    cfg.control.use_nn_for_knees = bool(args.nn_knees)
+
+    env = PassiveWalkerEnv(cfg, use_gui=args.gui)
+    obs, _ = env.reset(seed=args.seed)
+
+    zero_act = np.zeros(3, dtype=np.float32)  # FSM ignores unless --nn-hip/--nn-knees
+
+    t0 = time.time()
+    last = t0
+    steps = 0
+    total_r = 0.0
+    try:
+        done = False
+        while not done:
+            if args.gui and env.window is not None:
+                from mujoco.glfw import glfw
+
+                if glfw.window_should_close(env.window):
+                    break
+
+            obs, r, done, info = env.step(zero_act)
+            total_r += r
+            steps += 1
+
+            now = time.time()
+            if (now - last) >= args.print_interval:
+                fps = steps / (now - last)
+                print(
+                    f"time={info.get('time', 0):6.3f}  "
+                    f"dx={info.get('dx', 0):+.4f}  vx={info.get('vx', 0):+.3f}  "
+                    f"pitch|rad|={info.get('pitch_abs', 0):.3f}  "
+                    f"torso_z={info.get('torso_z', 0):.3f}  "
+                    f"r_step={r:+.4f}  r_sum={total_r:+.2f}  "
+                    f"fell={info.get('fell', False)}  fps~{fps:5.1f}"
+                )
+                last = now
+                steps = 0
+
+            env.render()
+
+    finally:
+        env.close()
