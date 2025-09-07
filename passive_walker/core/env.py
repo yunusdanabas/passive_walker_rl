@@ -51,16 +51,13 @@ class PassiveWalkerEnv(gym.Env):
 
         # ---- Controller + FSM
         self.pd = PDController(cfg.control)
-        self.fsm = FSMStateMachine(cfg.fsm)  # lightweight: only stores state; uses sim data to transition
+        self.fsm = FSMStateMachine()  # lightweight: only stores state; uses sim data to transition
 
         # ---- Reward (preset chosen in YAML: minimal/default/aggressive)
         if cfg.mode == "fsm":
             self.reward_fn = get_reward_fn("minimal")
         else:  # research mode
             self.reward_fn = get_reward_fn(cfg.reward.preset, cfg.reward.overrides)
-
-        # ---- Random number generator for deterministic DR
-        self._np_rng = np.random.RandomState(42)  # Default seed
 
         # ---- Preallocated scratch (avoid per-step allocs)
         self._obs = np.empty(_OBS_DIM, dtype=np.float32)
@@ -122,38 +119,11 @@ class PassiveWalkerEnv(gym.Env):
         tilt = np.deg2rad(self.cfg.physics.ramp_deg_min)
         self.model.opt.gravity[:] = [9.81 * np.sin(tilt), 0.0, -9.81 * np.cos(tilt)]
 
-    def _randomize_physics(self) -> None:
-        """Apply domain randomization to physics parameters."""
-        # Ramp tilt
-        tilt_deg = self._np_rng.uniform(
-            self.cfg.physics.ramp_deg_min,
-            self.cfg.physics.ramp_deg_max
-        )
-        tilt = np.deg2rad(tilt_deg)
-        self.model.opt.gravity[:] = [9.81 * np.sin(tilt), 0.0, -9.81 * np.cos(tilt)]
-
-        # Friction (geom 0: slide friction column)
-        mu = self._np_rng.uniform(*self.cfg.physics.friction)
-        self.model.geom_friction[:, 0] = mu
-
-        # Torso mass jitter
-        torso = self.b_torso
-        base_mass = float(self.model.body_mass[torso])
-        scale = self._np_rng.uniform(
-            1.0 - self.cfg.physics.mass_jitter,
-            1.0 + self.cfg.physics.mass_jitter
-        )
-        self.model.body_mass[torso] = base_mass * scale
-
     # -------------------------- Reset/Obs --------------------------------------------
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         if seed is not None:
             self.seed(seed)
         mujoco.mj_resetData(self.model, self.data)
-
-        # Domain randomization
-        if self.cfg.physics.randomize_physics:
-            self._randomize_physics()
 
         # FSM boot
         self.fsm.reset()
@@ -169,11 +139,6 @@ class PassiveWalkerEnv(gym.Env):
         self.prev_x = float(self.data.qpos[self.dof_x])
 
         return self._get_obs(), {}
-
-    def seed(self, seed: int):
-        """Set the random seed for deterministic domain randomization."""
-        self._np_rng = np.random.RandomState(seed)
-        return [seed]
 
     def _get_obs(self) -> np.ndarray:
         ob = self._obs
@@ -264,39 +229,14 @@ class PassiveWalkerEnv(gym.Env):
         reward, rinfo = self.reward_fn(signals)
         fell = rinfo["fell"]
 
-        # Additional termination conditions
-        fell = fell or (pitch_abs > self.cfg.terminations.fall_pitch_max) or (torso_z < self.cfg.terminations.fall_z_min)
-        stalled = abs(vx) < self.cfg.terminations.max_idle_speed
-        unstable = pitch_abs > 0.5
-
         done = fell or (self.data.time >= self.simend)
-        if self.cfg.terminations.enable_stall_termination:
-            done = done or stalled
-
-        # Rich info dictionary
         info = {
             "time": self.data.time,
             "dx": dx,
             "pitch_abs": pitch_abs,
             "torso_z": torso_z,
             "vx": vx,
-            "fell": fell,
-            "stalled": stalled,
-            "unstable": unstable,
         }
-        
-        # Quality metrics (if debug logging enabled)
-        if self.cfg.debug.log_quality:
-            stability = max(0.0, 1.0 - pitch_abs / 0.5)
-            motion = 1.0 if 0.1 <= abs(vx) <= 2.0 else 0.5
-            clearance = 1.0 if min(left_z, right_z) > 0.02 else 0.0
-            info["quality_score"] = stability + motion + clearance
-            
-        # FSM state logging (if debug enabled)
-        if self.cfg.debug.log_fsm:
-            info["fsm_state"] = self.fsm.hip_state
-            info["knee_states"] = self.fsm.knee_states.copy()
-            
         info.update(rinfo)  # Add reward breakdown
         return self._get_obs(), float(reward), bool(done), info
 
@@ -320,12 +260,11 @@ class PassiveWalkerEnv(gym.Env):
 
     def render(self, mode="human"):
         if not self.use_gui:
-            return None
+            return
         self._ensure_window()
         w, h = glfw.get_framebuffer_size(self.window)
         viewport = mujoco.MjrRect(0, 0, w, h)
         self.cam.lookat[0] = self.data.qpos[0]
-        self.cam.distance = self.cfg.render.camera_distance
         mujoco.mjv_updateScene(
             self.model,
             self.data,
@@ -336,21 +275,93 @@ class PassiveWalkerEnv(gym.Env):
             self.scene,
         )
         mujoco.mjr_render(viewport, self.scene, self.ctx)
-        
-        if mode == "rgb_array":
-            img_w = self.cfg.render.rgb_array_width
-            img_h = self.cfg.render.rgb_array_height
-            px = np.zeros((img_h, img_w, 3), dtype=np.uint8)
-            mujoco.mjr_readPixels(px, None, mujoco.MjrRect(0, 0, img_w, img_h), self.ctx)
-            glfw.poll_events()
-            return np.flipud(px)  # MuJoCo origin at bottom-left
-        else:
-            glfw.swap_buffers(self.window)
-            glfw.poll_events()
-            return None
+        glfw.swap_buffers(self.window)
+        glfw.poll_events()
 
     def close(self):
         if self.use_gui and self.window:
             glfw.destroy_window(self.window)
             glfw.terminate()
             self.window = None
+
+
+if __name__ == "__main__":
+    # Quick FSM demo runner for manual inspection / debugging.
+    import argparse
+    import time
+    import numpy as np
+
+    from .io import load_walker_config
+
+    parser = argparse.ArgumentParser(description="PassiveWalkerEnv demo runner")
+    parser.add_argument("--config", type=str, default="passive_walker/configs/walker.yaml",
+                        help="Path to walker YAML config")
+    parser.add_argument("--mode", type=str, default="fsm", choices=["fsm", "research"],
+                        help="Environment mode")
+    parser.add_argument("--seconds", type=float, default=20.0,
+                        help="Sim time limit (s)")
+    parser.add_argument("--gui", dest="gui", action="store_true",
+                        help="Enable GUI (default)")
+    parser.add_argument("--no-gui", dest="gui", action="store_false",
+                        help="Disable GUI")
+    parser.set_defaults(gui=True)
+    parser.add_argument("--seed", type=int, default=None, help="Seed for reset()")
+    # Optional: let NN override FSM for quick checks
+    parser.add_argument("--nn-hip", action="store_true", help="Use NN action for hip")
+    parser.add_argument("--nn-knees", action="store_true", help="Use NN actions for knees")
+    parser.add_argument("--print-interval", type=float, default=0.5,
+                        help="Telemetry print interval (s)")
+
+    args = parser.parse_args()
+
+    # Load and tweak config
+    cfg = load_walker_config(args.config)
+    cfg.mode = args.mode
+    # Force sim duration from CLI so you can vary it without editing YAML
+    cfg.env.simend = float(args.seconds)
+    # FSM by default; enable NN overrides if requested
+    cfg.control.use_nn_for_hip = bool(args.nn_hip)
+    cfg.control.use_nn_for_knees = bool(args.nn_knees)
+
+    env = PassiveWalkerEnv(cfg, use_gui=args.gui)
+    obs, _ = env.reset(seed=args.seed)
+
+    # If NN overrides are off, FSM fully controls all joints; actions are ignored.
+    # Still send a zero action array so the API path is exercised.
+    zero_act = np.zeros(3, dtype=np.float32)
+
+    t0 = time.time()
+    last = t0
+    steps = 0
+    total_r = 0.0
+    try:
+        done = False
+        while not done:
+            # Allow closing the window to exit early
+            if args.gui and env.window is not None:
+                from mujoco.glfw import glfw
+                if glfw.window_should_close(env.window):
+                    break
+
+            obs, r, done, info = env.step(zero_act)
+            total_r += r
+            steps += 1
+            
+            # Periodic telemetry - print every 10 steps
+            if steps % 10 == 0:
+                fps = steps / (time.time() - t0)
+                print(
+                    f"time={info.get('time', 0):6.3f}  "
+                    f"dx={info.get('dx', 0):+.4f}  vx={info.get('vx', 0):+.3f}  "
+                    f"pitch|rad|={info.get('pitch_abs', 0):.3f}  "
+                    f"torso_z={info.get('torso_z', 0):.3f}  "
+                    f"r_step={r:+.4f}  r_sum={total_r:+.2f}  "
+                    f"fell={info.get('fell', False)}  fps~{fps:5.1f}"
+                )
+
+            # Draw if GUI enabled
+            env.render()
+
+    finally:
+        print(f"\nSimulation ended after {steps} steps, total reward: {total_r:.3f}")
+        env.close()
