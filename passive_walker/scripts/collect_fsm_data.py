@@ -19,7 +19,7 @@ from passive_walker.core.rollout_buffer import RolloutBuffer
 
 
 def collect_episode(env: PassiveWalkerEnv, buffer: RolloutBuffer, episode_id: int) -> dict:
-    """Collect one episode and return metrics."""
+    """Collect one episode and return performance metrics."""
     obs, _ = env.reset()
     buffer.reset()
 
@@ -33,21 +33,21 @@ def collect_episode(env: PassiveWalkerEnv, buffer: RolloutBuffer, episode_id: in
 
     done = False
     while not buffer.is_full() and not done:
-        # FSM mode uses zeros (FSM overrides actions)
+        # FSM mode uses zero actions (FSM overrides them)
         act = np.zeros(3, dtype=np.float32)
         obs2, rew, done, info = env.step(act)
 
-        # Extract reward breakdown for extras
+        # Extract reward components for analysis
         extras = {k: info[k] for k in info.keys() if k.startswith("r_")}
 
-        # Add to buffer
+        # Store experience in buffer
         buffer.add(obs, act, rew, done, info, extras)
 
-        # Update metrics
+        # Update episode metrics
         episode_metrics["total_reward"] += rew
         episode_metrics["steps"] += 1
         episode_metrics["fell"] = info.get("fell", False)
-        episode_metrics["final_x"] = info.get("dx", 0.0)  # This is actually dx, not final x
+        episode_metrics["final_x"] = info.get("dx", 0.0)  # Forward progress
 
         obs = obs2
 
@@ -55,6 +55,7 @@ def collect_episode(env: PassiveWalkerEnv, buffer: RolloutBuffer, episode_id: in
 
 
 def main():
+    """Main function for FSM data collection."""
     parser = argparse.ArgumentParser(description="Collect FSM data for BC training")
     parser.add_argument(
         "--config",
@@ -79,25 +80,23 @@ def main():
 
     args = parser.parse_args()
 
-    # Load config and set to FSM mode
+    # Load configuration and force FSM mode
     cfg = load_walker_config(args.config)
     cfg.mode = "fsm"  # Force FSM mode for data collection
 
-    # Create environment
+    # Initialize environment and output directory
     env = PassiveWalkerEnv(cfg, use_gui=args.use_gui)
-
-    # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # Create rollout buffer
+    # Create rollout buffer for experience storage
     buffer = RolloutBuffer(
         rollout_len=args.rollout_len,
-        obs_dim=11,  # From env observation space
-        act_dim=3,  # From env action space
+        obs_dim=11,  # Environment observation space
+        act_dim=3,  # Environment action space
         store_extras=True,
     )
 
-    # Collection statistics
+    # Initialize collection statistics
     collected_episodes = 0
     total_episodes = 0
     all_metrics = []
@@ -132,7 +131,10 @@ def main():
 
             # Print progress every 10 episodes
             if total_episodes % 10 == 0:
-                print(f"] {collected_episodes}/{args.num_episodes} collected, {rejected_count} rejected", flush=True)
+                print(
+                    f"] {collected_episodes}/{args.num_episodes} collected, {rejected_count} rejected",
+                    flush=True,
+                )
                 print("Progress: [", end="", flush=True)
 
     except KeyboardInterrupt:
@@ -158,8 +160,10 @@ def main():
     with open(summary_file, "w") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"\n✅ Collection complete!")
-    print(f"📊 Episodes collected: {collected_episodes}/{total_episodes} ({collected_episodes / max(1, total_episodes):.1%})")
+    print("\n✅ Collection complete!")
+    print(
+        f"📊 Episodes collected: {collected_episodes}/{total_episodes} ({collected_episodes / max(1, total_episodes):.1%})"
+    )
     print(f"📁 Data saved to: {args.output_dir}")
     print(f"📋 Summary: {summary_file}")
 
