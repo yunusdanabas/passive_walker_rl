@@ -3,6 +3,10 @@ Passive Walker Environment
 
 Bipedal walking environment with FSM and neural network control modes.
 Supports both headless and GUI operation with proper physics simulation.
+
+Parameters live at the top of this file; no YAML config needed.
+GUI is off by default; use --gui flag when running as module.
+See passive_walker/fsm/README.md for usage examples.
 """
 from __future__ import annotations
 from typing import Optional
