@@ -22,7 +22,7 @@ from pathlib import Path
 
 from passive_walker.envs.mujoco_env import PassiveWalkerEnv
 from passive_walker.envs.mujoco_fsm_env import PassiveWalkerEnv as FSMEnv
-from passive_walker.constants import XML_PATH, RESULTS
+from constants import XML_PATH, RESULTS
 from passive_walker.ppo.scratch import load_model
 
 # ––– Defaults ––––––––––––––––––––––––––––––––––––––––––––––––––––––––––

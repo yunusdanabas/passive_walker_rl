@@ -22,7 +22,7 @@ import equinox as eqx
 from pathlib import Path
 import numpy as np
 
-from passive_walker.constants import (
+from constants import (
     ROOT,
     XML_PATH,
     DATA_DIR,

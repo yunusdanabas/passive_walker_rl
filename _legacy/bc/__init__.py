@@ -17,7 +17,7 @@ from importlib import import_module
 from typing import Optional
 
 # Local imports
-from passive_walker.constants import (
+from constants import (
     ROOT,
     XML_PATH,
     DATA_DIR,

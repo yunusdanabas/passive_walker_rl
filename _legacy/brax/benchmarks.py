@@ -13,7 +13,7 @@ from IPython.display import HTML
 
 from passive_walker.envs.brax_env import BraxPassiveWalker
 
-from passive_walker.constants import XML_PATH
+from constants import XML_PATH
 from passive_walker.brax.utils import uint64_patch
 
 
