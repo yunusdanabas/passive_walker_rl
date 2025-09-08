@@ -1,144 +1,69 @@
-"""
-Reward function module for the passive walker.
-
-Provides configurable reward functions with preset configurations for different training modes.
-"""
+# passive_walker/core/reward.py
+# Simple reward with minimal knobs. No external config.
+# Keeps env compatibility via get_reward_fn(mode).
 
 from __future__ import annotations
-from dataclasses import dataclass, asdict
-from typing import Callable, Dict, Tuple
-import math
+import numpy as np
+from typing import Dict, Tuple
 
+# -------------------- Termination / alive thresholds --------------------
+FALL_PITCH_MAX = 1.3    # rad: terminate if |pitch| exceeds this
+FALL_Z_MIN     = 0.70   # m: terminate if torso is too low
+ALIVE_Z_MIN    = 0.90   # m: small alive bonus if above this
 
-@dataclass(frozen=True)
-class RewCfg:
-    """Reward configuration parameters."""
+# -------------------- Weights (kept tiny, per mode) --------------------
+# Signals used: dx (forward progress), pitch_abs, u_abs_sum, torso_z
+WEIGHTS_FSM = dict(
+    w_dx=1.0,     # reward for forward progress per step
+    w_pitch=0.2,  # penalty for absolute pitch
+    w_ctrl=0.001, # penalty for control effort (sum |u|)
+    w_alive=0.10, # alive bonus when torso high enough
+)
 
-    # Core reward components
-    c_fp: float = 1.0  # forward progress coefficient
-    c_up: float = 0.5  # upright bonus coefficient
-    upright_pitch_max: float = 0.25  # max pitch for upright bonus (radians)
-    c_ac: float = 3e-4  # action cost coefficient (L1)
+WEIGHTS_RESEARCH = dict(
+    w_dx=2.0,
+    w_pitch=0.5,
+    w_ctrl=0.003,
+    w_alive=0.20,
+)
 
-    # Optional shaping terms
-    c_vt: float = 0.25  # velocity tracking coefficient
-    vx_star: float = 0.8  # target velocity (m/s)
-    sigma_v: float = 0.25  # velocity tracking width
+def _fell(signals: Dict[str, float]) -> bool:
+    """Simple fall detection using pitch and torso height."""
+    return (float(signals.get("pitch_abs", 0.0)) > FALL_PITCH_MAX) or (
+        float(signals.get("torso_z", 0.0)) < FALL_Z_MIN
+    )
 
-    c_sym: float = 0.05  # knee symmetry coefficient
-    sigma_sym: float = 0.4  # symmetry tracking width
+def _reward(signals: Dict[str, float], w: Dict[str, float]) -> Tuple[float, Dict[str, float]]:
+    """Compute scalar reward and a tiny info dict."""
+    dx       = float(signals.get("dx", 0.0))
+    pitch    = float(signals.get("pitch_abs", 0.0))
+    u_sum    = float(signals.get("u_abs_sum", 0.0))
+    torso_z  = float(signals.get("torso_z", 0.0))
 
-    c_fc: float = 0.05  # foot clearance coefficient
-    foot_clear_target: float = 0.03  # target foot clearance (m)
+    alive = w["w_alive"] if torso_z >= ALIVE_Z_MIN else 0.0
+    r = (
+        w["w_dx"]   * max(dx, 0.0)      # forward only
+        - w["w_pitch"] * pitch          # posture penalty
+        - w["w_ctrl"]  * u_sum          # effort penalty
+        + alive                          # small shaping
+    )
 
-    # Termination and clipping
-    pen_fall: float = 5.0  # fall penalty
-    fall_pitch_max: float = 1.0  # max pitch before fall (radians)
-    fall_z_min: float = 0.15  # min height before fall (m)
-    clip_low: float = -5.0  # minimum reward
-    clip_high: float = 5.0  # maximum reward
+    info = {
+        "fell": _fell(signals),
+        "r_dx": w["w_dx"] * max(dx, 0.0),
+        "r_pitch": -w["w_pitch"] * pitch,
+        "r_ctrl": -w["w_ctrl"] * u_sum,
+        "r_alive": alive,
+    }
+    return float(r), info
 
+def compute_reward(signals: Dict[str, float], mode: str = "fsm") -> Tuple[float, Dict[str, float]]:
+    """Main entry: pick weights by mode ('fsm' or 'research')."""
+    if mode == "research":
+        return _reward(signals, WEIGHTS_RESEARCH)
+    # default to FSM weights
+    return _reward(signals, WEIGHTS_FSM)
 
-# Reward presets for different training modes
-_PRESETS: Dict[str, RewCfg] = {
-    "minimal": RewCfg(c_up=0.0, c_ac=3e-4, c_vt=0.0, c_sym=0.0, c_fc=0.0),
-    "default": RewCfg(),  # Standard configuration
-    "aggressive": RewCfg(
-        c_fp=2.0,
-        c_up=1.0,
-        c_ac=1e-3,
-        c_vt=0.5,
-        c_sym=0.1,
-        c_fc=0.1,
-        pen_fall=10.0,
-        clip_low=-10.0,
-        clip_high=10.0,
-    ),
-}
-
-
-def _merge(cfg: RewCfg, overrides: Dict | None) -> RewCfg:
-    """Merge configuration with overrides."""
-    if not overrides:
-        return cfg
-    d = asdict(cfg)
-    d.update(overrides)
-    return RewCfg(**d)
-
-
-def get_reward_fn(
-    preset: str = "default", overrides: Dict | None = None
-) -> Callable[[Dict], Tuple[float, Dict]]:
-    """Get reward function with specified preset and overrides."""
-    base = _PRESETS.get(preset)
-    if base is None:
-        raise ValueError(f"Unknown reward preset: {preset!r}. Choices: {list(_PRESETS)}")
-    cfg = _merge(base, overrides)
-
-    def softplus(x: float) -> float:
-        """Smooth hinge function: ~max(0, x)."""
-        return math.log1p(math.exp(x))
-
-    def reward(signals: Dict) -> Tuple[float, Dict]:
-        """Compute reward from state signals."""
-        # Extract required signals
-        dx = float(signals["dx"])
-        pitch_abs = float(signals["pitch_abs"])
-        u_abs_sum = float(signals["u_abs_sum"])
-        torso_z = float(signals["torso_z"])
-        vx = float(signals.get("vx", 0.0))
-        lk_q = float(signals.get("lk_q", 0.0))
-        rk_q = float(signals.get("rk_q", 0.0))
-        left_z = float(signals.get("left_foot_z", 0.0))
-        right_z = float(signals.get("right_foot_z", 0.0))
-
-        # Compute reward components
-        r_fp = cfg.c_fp * dx  # Forward progress
-
-        # Upright bonus (smooth parabola)
-        ratio = pitch_abs / max(1e-6, cfg.upright_pitch_max)
-        r_up = cfg.c_up * max(0.0, 1.0 - ratio * ratio)
-
-        # Action cost (L1 penalty)
-        r_ac = cfg.c_ac * u_abs_sum
-
-        # Velocity tracking (Gaussian reward)
-        vel_term = 0.0
-        if cfg.c_vt != 0.0:
-            d = (vx - cfg.vx_star) / max(1e-6, cfg.sigma_v)
-            vel_term = cfg.c_vt * math.exp(-0.5 * d * d)
-
-        # Knee symmetry (Gaussian reward)
-        sym_term = 0.0
-        if cfg.c_sym != 0.0:
-            d = (lk_q - rk_q) / max(1e-6, cfg.sigma_sym)
-            sym_term = cfg.c_sym * math.exp(-0.5 * d * d)
-
-        # Foot clearance (softplus reward)
-        fc_term = 0.0
-        if cfg.c_fc != 0.0:
-            lc = softplus(left_z - cfg.foot_clear_target)
-            rc = softplus(right_z - cfg.foot_clear_target)
-            fc_term = cfg.c_fc * 0.5 * (lc + rc)
-
-        # Check for fall and apply penalty
-        fell = (pitch_abs > cfg.fall_pitch_max) or (torso_z < cfg.fall_z_min)
-        pen_fall = cfg.pen_fall if fell else 0.0
-
-        # Combine all terms and clip
-        raw = r_fp + r_up + vel_term + sym_term + fc_term - r_ac - pen_fall
-        rew = max(cfg.clip_low, min(cfg.clip_high, raw))
-
-        # Return reward and breakdown
-        extras = {
-            "r_forward": r_fp,
-            "r_upright": r_up,
-            "r_vel": vel_term,
-            "r_sym": sym_term,
-            "r_clear": fc_term,
-            "r_act_cost": r_ac,
-            "fell": fell,
-        }
-        return rew, extras
-
-    return reward
+def get_reward_fn(mode: str = "fsm"):
+    """Env-compatible factory: returns a (signals)->(reward, info) callable."""
+    return lambda signals: compute_reward(signals, mode)

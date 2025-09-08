@@ -1,36 +1,75 @@
 mode: "fsm"            # "fsm" | "research"
 
 env:
-  simend: 30.0
-  ctrl_hz: 60
   xml_path: "passive_walker/assets/passiveWalker_model.xml"
-  randomize_physics: false
+  ctrl_hz: 60
+  simend: 30.0
 
 physics:
   ramp_deg_min: 10.0
   ramp_deg_max: 14.0
   friction: [0.8, 1.0]
   mass_jitter: 0.05
+  randomize_physics: false
+
+termination:
+  fall_pitch_max: 1.3
   fall_z_min: 0.15
-  fall_pitch_max: 1.0
+  max_idle_speed: 0.005
+  enable_stall_termination: false
 
 control:
+  use_nn_for_hip: false
+  use_nn_for_knees: false
   kp: [5.0, 1000.0, 1000.0]
   kv: [1.0, 100.0, 100.0]
   umin: [-50.0, -800.0, -800.0]
   umax: [50.0, 800.0, 800.0]
   joint_ranges: [[-0.5, 0.5], [-0.5, 0.5], [-0.5, 0.5]]
-  use_nn_for_hip: false
-  use_nn_for_knees: false
-
-terminations:
-  fall_z_min: 0.15
-  fall_pitch_max: 1.0
 
 reward:
   preset: "default"     # "minimal" | "default" | "aggressive"
   overrides: {}         # e.g., { c_ac: 0.0002, vx_star: 1.0 }
 
+fsm:
+  contact_height: 0.05
+  knee_release_threshold: 0.10
+  hip_swing_pos: 0.5
+  hip_swing_neg: -0.5
+  knee_stance: 0.0
+  knee_retract: -0.25
+
+render:
+  camera_distance: 8.0
+  rgb_array_width: 1200
+  rgb_array_height: 900
+
+debug:
+  log_quality: false
+  log_fsm: false
+
 jax:
   enable: false         # use JAX paths where available
   batched: false        # if true, expect vectorized signals/actions in callers
+
+bc:
+  data_dir: "data/bc/raw"
+  out_dir: "results/bc"
+  epochs: 100
+  batch_size: 256
+  lr: 3e-4
+  normalize_obs: true
+  loss: "huber"
+
+ppo:
+  num_envs: 8
+  steps_per_env: 1024
+  epochs: 3
+  minibatches: 8
+  gamma: 0.99
+  lam: 0.95
+  clip: 0.2
+  vf_coef: 0.5
+  ent_coef: 0.0
+  lr: 3e-4
+  engine: "mujoco"
