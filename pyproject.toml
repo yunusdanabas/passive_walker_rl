@@ -27,9 +27,10 @@ dependencies = [
 ]
 
 [project.scripts]
-walker-collect-fsm = "passive_walker.scripts.collect_fsm_data:main"
-walker-train-bc = "passive_walker.scripts.train_bc:main"
-walker-train-ppo = "passive_walker.scripts.train_ppo:main"
+walker-collect-fsm = "passive_walker.fsm.collect:main"
+walker-train-bc = "passive_walker.bc.train:main"
+walker-train-ppo = "passive_walker.ppo.train:main"
+walker-demo = "passive_walker.core.env:main"
 
 [project.urls]
 "Repository" = "https://github.com/YOUR_USERNAME/passive_walker_rl"

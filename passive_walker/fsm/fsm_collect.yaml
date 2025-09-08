@@ -1,0 +1,49 @@
+mode: fsm
+seed: 0
+
+env:
+  xml_path: passive_walker/assets/passiveWalker_model.xml
+  ctrl_hz: 60
+  simend: 20.0
+
+control:
+  use_nn_for_hip: false
+  use_nn_for_knees: false
+  kp: [5.0, 1000.0, 1000.0]
+  kv: [1.0, 100.0, 100.0]
+  umin: [-50.0, -800.0, -800.0]
+  umax: [50.0, 800.0, 800.0]
+
+reward:
+  preset: minimal
+  overrides: {}
+
+physics:
+  ramp_deg_min: 10.0
+  ramp_deg_max: 14.0
+  friction: [0.8, 1.0]
+  mass_jitter: 0.05
+  randomize_physics: false  # flip true to enable DR in Step 3
+
+termination:
+  fall_pitch_max: 1.0
+  fall_z_min: 0.15
+  max_idle_speed: 0.005
+  enable_stall_termination: false
+
+fsm:
+  contact_height: 0.05
+  knee_release_threshold: 0.10
+  hip_swing_pos: 0.5
+  hip_swing_neg: -0.5
+  knee_stance: 0.0
+  knee_retract: -0.25
+
+render:
+  camera_distance: 8.0
+  rgb_array_width: 1200
+  rgb_array_height: 900
+
+debug:
+  log_quality: false
+  log_fsm: false

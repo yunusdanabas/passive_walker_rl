@@ -2,6 +2,8 @@ README.md
 pyproject.toml
 passive_walker/__init__.py
 passive_walker/constants.py
+passive_walker/bc/__init__.py
+passive_walker/bc/train.py
 passive_walker/core/__init__.py
 passive_walker/core/config.py
 passive_walker/core/controller.py
@@ -10,6 +12,14 @@ passive_walker/core/io.py
 passive_walker/core/jax_utils.py
 passive_walker/core/reward.py
 passive_walker/core/rollout_buffer.py
+passive_walker/fsm/__init__.py
+passive_walker/fsm/collect.py
+passive_walker/jax/__init__.py
+passive_walker/jax/controller_jax.py
+passive_walker/jax/reward_jax.py
+passive_walker/jax/rng.py
+passive_walker/ppo/__init__.py
+passive_walker/ppo/train.py
 passive_walker/scripts/collect_fsm_data.py
 passive_walker/scripts/train_bc.py
 passive_walker/scripts/train_ppo.py

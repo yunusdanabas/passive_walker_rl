@@ -1,9 +1,10 @@
 """Test JAX utilities functionality."""
 
 import jax.numpy as jnp
-from passive_walker.core.jax_utils import (
+from passive_walker.jax import (
     pd_step,
-    v_pd_step,
+    pd_step_vmap,
+    pd_step_broadcast,
     quat2euler_zyx,
     v_quat2euler_zyx,
     make_batched_reward_fn,
@@ -27,17 +28,34 @@ def test_pd_step():
     assert jnp.all(u <= umax)
 
 
-def test_v_pd_step():
-    """Test batched PD control step."""
+def test_pd_step_vmap():
+    """Test batched PD control step with matching batch sizes."""
     q = jnp.array([[0.1, 0.2, 0.3], [0.2, 0.3, 0.4]])
     qd = jnp.array([[0.01, 0.02, 0.03], [0.02, 0.03, 0.04]])
     q_des = jnp.array([[0.0, 0.0, 0.0], [0.1, 0.1, 0.1]])
-    kp = jnp.array([1.0, 2.0, 3.0])
-    kv = jnp.array([0.1, 0.2, 0.3])
-    umin = jnp.array([-10.0, -20.0, -30.0])
-    umax = jnp.array([10.0, 20.0, 30.0])
+    kp = jnp.array([[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]])  # Same batch size
+    kv = jnp.array([[0.1, 0.2, 0.3], [0.1, 0.2, 0.3]])  # Same batch size
+    umin = jnp.array([[-10.0, -20.0, -30.0], [-10.0, -20.0, -30.0]])  # Same batch size
+    umax = jnp.array([[10.0, 20.0, 30.0], [10.0, 20.0, 30.0]])  # Same batch size
 
-    u = v_pd_step(q, qd, q_des, kp, kv, umin, umax)
+    u = pd_step_vmap(q, qd, q_des, kp, kv, umin, umax)
+
+    assert u.shape == (2, 3)
+    assert jnp.all(u >= umin)
+    assert jnp.all(u <= umax)
+
+
+def test_pd_step_broadcast():
+    """Test batched PD control step with broadcasting."""
+    q = jnp.array([[0.1, 0.2, 0.3], [0.2, 0.3, 0.4]])
+    qd = jnp.array([[0.01, 0.02, 0.03], [0.02, 0.03, 0.04]])
+    q_des = jnp.array([[0.0, 0.0, 0.0], [0.1, 0.1, 0.1]])
+    kp = jnp.array([1.0, 2.0, 3.0])  # Shape (3,) - will broadcast
+    kv = jnp.array([0.1, 0.2, 0.3])  # Shape (3,) - will broadcast
+    umin = jnp.array([-10.0, -20.0, -30.0])  # Shape (3,) - will broadcast
+    umax = jnp.array([10.0, 20.0, 30.0])  # Shape (3,) - will broadcast
+
+    u = pd_step_broadcast(q, qd, q_des, kp, kv, umin, umax)
 
     assert u.shape == (2, 3)
     assert jnp.all(u >= umin)
