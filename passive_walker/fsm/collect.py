@@ -1,97 +1,147 @@
 """
-FSM Data Collection
+FSM Data Collection (Ultra-Lean)
 
-Simple data collection for FSM walking behavior.
+High-performance FSM data collection with pre-allocation, deterministic seeding,
+and clean NPZ schema for BC consumption.
 """
-from __future__ import annotations
-import argparse
 import os
+import json
+import time
+import argparse
 import numpy as np
-from pathlib import Path
 from passive_walker.core.env import PassiveWalkerEnv
+
+# ---------- knobs (edit here) ----------
+DEFAULT_EPISODES = 10        # episodes to collect
+DEFAULT_STEPS = 512          # steps per episode (upper bound; episode may end earlier)
+DEFAULT_OUTDIR = "data/fsm"  # output directory
+DEFAULT_SEED = 123           # base random seed
+DEFAULT_MODE = "fsm"         # don't change: collector assumes FSM
+PRINT_EVERY_SEC = 0.5        # console throttle
+SAVE_META = True             # write <outdir>/meta.json once
+COMPRESS_NPZ = True          # use np.savez_compressed
+# --------------------------------------
+
+
+def _save_npz(path, payload, compress=True):
+    """Save NPZ file with optional compression."""
+    if compress:
+        np.savez_compressed(path, **payload)
+    else:
+        np.savez(path, **payload)
+
+
+def collect(episodes, steps, outdir, seed=None):
+    """
+    Collect FSM walking episodes with pre-allocation and deterministic seeding.
+    
+    Args:
+        episodes: Number of episodes to collect
+        steps: Maximum steps per episode
+        outdir: Output directory for NPZ files
+        seed: Base random seed (None for non-deterministic)
+    """
+    os.makedirs(outdir, exist_ok=True)
+
+    # Save metadata once
+    if SAVE_META:
+        meta = {
+            "episodes": int(episodes),
+            "steps_per_episode": int(steps),
+            "seed": None if seed is None else int(seed),
+            "env": "PassiveWalkerEnv",
+            "mode": "fsm",
+            "schema": {
+                "obs": "(T+1,11)",
+                "act": "(T,3)",
+                "rew": "(T,)",
+                "done": "(T,)",
+                "info_pitch": "(T,)",
+                "info_torso_z": "(T,)",
+                "info_dx": "(T,)"
+            },
+        }
+        with open(os.path.join(outdir, "meta.json"), "w") as f:
+            json.dump(meta, f, indent=2)
+
+    # One env reused across episodes
+    env = PassiveWalkerEnv(mode=DEFAULT_MODE, use_gui=False)
+
+    for ep in range(episodes):
+        # Deterministic per-episode seed (nice for reproducibility & sharding)
+        ep_seed = None if seed is None else (int(seed) + ep)
+        obs, _ = env.reset(seed=ep_seed)
+
+        # Pre-allocate buffers (fast, no per-step allocation)
+        T = int(steps)
+        obs_buf = np.empty((T + 1, 11), dtype=np.float32)
+        obs_buf[0] = obs
+        act_buf = np.zeros((T, 3), dtype=np.float32)      # FSM ignores actions
+        rew_buf = np.empty((T,), dtype=np.float32)
+        done_buf = np.empty((T,), dtype=np.bool_)
+        ipitch = np.empty((T,), dtype=np.float32)
+        itorso = np.empty((T,), dtype=np.float32)
+        idx = np.empty((T,), dtype=np.float32)
+
+        last_print = time.time()
+        t_used = 0
+
+        for t in range(T):
+            # Action zeros (FSM mode)
+            action = act_buf[t]
+            obs, r, done, info = env.step(action)
+
+            # Write row
+            obs_buf[t + 1] = obs
+            rew_buf[t] = r
+            done_buf[t] = done
+            ipitch[t] = info.get("pitch_abs", 0.0)
+            itorso[t] = info.get("torso_z", 0.0)
+            idx[t] = info.get("dx", 0.0)
+            t_used = t + 1
+
+            # Periodic print
+            now = time.time()
+            if (now - last_print) >= PRINT_EVERY_SEC:
+                print(f"[ep {ep+1}/{episodes}] t={t_used:4d}/{T} "
+                      f"dx={idx[t]:+.4f} pitch|rad|={ipitch[t]:.3f} "
+                      f"torso_z={itorso[t]:.3f} done={bool(done)}")
+                last_print = now
+
+            if done:
+                break
+
+        # Trim to actual length and save
+        payload = dict(
+            obs=obs_buf[:t_used + 1],
+            act=act_buf[:t_used],
+            rew=rew_buf[:t_used],
+            done=done_buf[:t_used],
+            info_pitch=ipitch[:t_used],
+            info_torso_z=itorso[:t_used],
+            info_dx=idx[:t_used],
+        )
+        out_path = os.path.join(outdir, f"episode_{ep:06d}.npz")
+        _save_npz(out_path, payload, compress=COMPRESS_NPZ)
+        print(f"saved: {out_path} (T={t_used})")
+
+    env.close()
 
 
 def main():
-    """Collect FSM walking data."""
-    parser = argparse.ArgumentParser("FSM data collection")
-    parser.add_argument("--episodes", type=int, default=1, help="Number of episodes")
-    parser.add_argument("--steps", type=int, default=512, help="Steps per episode")
-    parser.add_argument("--seed", type=int, default=None, help="Random seed")
-    parser.add_argument("--out", type=str, default=None, help="Output directory")
-    parser.add_argument("--gui", action="store_true", help="Enable GUI")
-    parser.add_argument("--no-gui", dest="gui", action="store_false", help="Disable GUI")
-    parser.set_defaults(gui=False)
+    """Main CLI entry point."""
+    parser = argparse.ArgumentParser("FSM data collection (ultra-lean)")
+    parser.add_argument("--episodes", type=int, default=DEFAULT_EPISODES,
+                        help="Number of episodes to collect")
+    parser.add_argument("--steps", type=int, default=DEFAULT_STEPS,
+                        help="Steps per episode")
+    parser.add_argument("--out", type=str, default=DEFAULT_OUTDIR,
+                        help="Output directory")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED,
+                        help="Random seed")
     args = parser.parse_args()
-
-    # Create output directory if specified
-    if args.out:
-        os.makedirs(args.out, exist_ok=True)
-
-    # Initialize environment
-    env = PassiveWalkerEnv(mode="fsm", use_gui=args.gui)
     
-    # Set random seed
-    if args.seed is not None:
-        np.random.seed(args.seed)
-
-    print(f"Collecting {args.episodes} episodes of {args.steps} steps each...")
-    
-    total_steps = 0
-    successful_episodes = 0
-
-    for episode in range(args.episodes):
-        obs, _ = env.reset(seed=args.seed)
-        
-        # Pre-allocate episode buffers
-        obs_buffer = np.zeros((args.steps + 1, 11), dtype=np.float32)
-        act_buffer = np.zeros((args.steps, 3), dtype=np.float32)  # FSM uses zeros
-        rew_buffer = np.zeros(args.steps, dtype=np.float32)
-        done_buffer = np.zeros(args.steps, dtype=bool)
-        
-        obs_buffer[0] = obs
-        episode_steps = 0
-        
-        for step in range(args.steps):
-            # FSM mode ignores actions
-            obs, reward, done, info = env.step(np.zeros(3))
-            
-            # Store data
-            obs_buffer[step + 1] = obs
-            act_buffer[step] = np.zeros(3)  # FSM uses zero actions
-            rew_buffer[step] = reward
-            done_buffer[step] = done
-            episode_steps += 1
-            
-            if done:
-                break
-        
-        # Save episode data if output directory specified
-        if args.out:
-            episode_file = os.path.join(args.out, f"episode_{episode:06d}.npz")
-            np.savez_compressed(
-                episode_file,
-                obs=obs_buffer[:episode_steps + 1],
-                act=act_buffer[:episode_steps],
-                rew=rew_buffer[:episode_steps],
-                done=done_buffer[:episode_steps]
-            )
-            print(f"Saved episode {episode} to {episode_file}")
-        
-        total_steps += episode_steps
-        if not done:  # Episode completed successfully
-            successful_episodes += 1
-        
-        print(f"Episode {episode + 1}/{args.episodes}: {episode_steps} steps, "
-              f"pitch={info.get('pitch_abs', 0):.3f}, fell={info.get('fell', False)}")
-
-    # Print summary
-    print(f"\nCollection complete:")
-    print(f"  Episodes: {args.episodes}")
-    print(f"  Successful: {successful_episodes}")
-    print(f"  Total steps: {total_steps}")
-    print(f"  Success rate: {successful_episodes/args.episodes*100:.1f}%")
-    
-    env.close()
+    collect(args.episodes, args.steps, args.out, args.seed)
 
 
 if __name__ == "__main__":
