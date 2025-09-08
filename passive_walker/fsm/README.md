@@ -1,67 +1,56 @@
-# FSM Data Collection
+# FSM Data Collection (Ultra-Lean)
 
-This module handles collection of expert demonstration data using the Finite State Machine (FSM) controller.
+This folder provides a **minimal**, **deterministic** finite-state-machine (FSM) data collector using the simplified core environment.
 
-## Overview
+## Quick Start
 
-The FSM controller provides expert demonstrations by using a state machine to control the walker's hip and knee joints. This data is then used to train behavioral cloning policies.
-
-## Usage
-
-### Collect FSM Data
-
+Collect 2 episodes × 64 steps, headless:
 ```bash
-# Basic collection
-walker.collect_fsm --data-dir data/bc/raw --num-episodes 100
-
-# With custom config
-walker.collect_fsm --config passive_walker/fsm/fsm_collect.yaml --num-episodes 200
-
-# With GUI for monitoring
-walker.collect_fsm --gui --num-episodes 50
-
-# Headless mode (default)
-walker.collect_fsm --no-gui --num-episodes 1000
+python -m passive_walker.fsm.collect --episodes 2 --steps 64 --out data/fsm --seed 42
 ```
 
-### Configuration
+Files produced (per episode):
 
-The FSM collection uses `passive_walker/fsm/fsm_collect.yaml` by default. Key parameters:
+```
+data/fsm/
+  episode_000000.npz
+  episode_000001.npz
+  meta.json
+```
 
-- `env.simend`: Episode length in seconds (default: 20.0)
-- `physics.ramp_deg_min/max`: Ramp angle range (default: 10.0, 10.0)
-- `physics.friction`: Friction coefficient range (default: [0.8, 0.8])
-- `fsm.*`: FSM controller parameters (contact height, thresholds, etc.)
+## Data Schema (NPZ)
 
-### Output
+Each `episode_*.npz` contains:
 
-Episodes are saved to `data/bc/raw/YYYYmmdd-HHMMSS-fsm_collection_*/` with:
+* `obs: (T+1, 11)` — observations `[x, z, pitch, ẋ, ż, hip, lk, rk, hiṗ, lk̇, rk̇]`
+* `act: (T, 3)` — actions (zeros in FSM mode)
+* `rew: (T,)` — reward per step
+* `done: (T,)` — terminal flags
+* `info_pitch: (T,)` — |pitch| (radians)
+* `info_torso_z: (T,)` — torso height (m)
+* `info_dx: (T,)` — forward delta x per step
 
-- `episode_XXXXXX.npz`: Individual episode data (observations, actions, rewards, dones, infos)
-- `meta.json`: Collection metadata (git SHA, config, seeds, etc.)
-- `collection_summary.json`: Summary statistics
+> Optional (if enabled in the collector):
+> `label_qdes: (T, 3)` physical joint targets (FSM desired)
+> `label_act:  (T, 3)` the same targets normalized to `[-1, 1]` (BC-ready)
 
-## FSM Controller
+## Determinism
 
-The FSM controller uses contact detection to determine when to swing or stance each leg:
+* Set `--seed S`, episodes use `S + episode_idx`.
+* Headless, no randomness unless enabled at the top of `env.py`.
+* Re-running the same command yields byte-identical arrays.
 
-1. **Contact Detection**: Uses foot height to detect ground contact
-2. **Hip Control**: Swings hip forward/backward based on contact state
-3. **Knee Control**: Retracts knee during swing, extends during stance
+## Notes
 
-## Data Format
+* All parameters live **at the top** of the respective Python files.
+* No YAML/config/overrides.
+* GUI is off by default in the collector; use the environment module for interactive demos:
 
-Each episode NPZ file contains:
-
-- `observations`: [T, 11] - State observations
-- `actions`: [T, 3] - Actions (all zeros for FSM mode)
-- `rewards`: [T] - Step rewards
-- `dones`: [T] - Episode termination flags
-- `infos`: [T] - Additional info dicts
+  ```bash
+  python -m passive_walker.core.env --gui --seconds 5
+  ```
 
 ## Troubleshooting
 
-- **Short episodes**: Check termination conditions in config
-- **No contact detection**: Verify foot body IDs in FSM setup
-- **GUI issues**: Use `--no-gui` for headless collection
-
+* Gym deprecation warnings are harmless; the core uses **Gymnasium**.
+* If you run on a headless server and accidentally enable GUI, ensure EGL/OSMesa is available, or run with `--no-gui`.

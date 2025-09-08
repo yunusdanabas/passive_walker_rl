@@ -3,6 +3,9 @@ FSM Data Collection (Ultra-Lean)
 
 High-performance FSM data collection with pre-allocation, deterministic seeding,
 and clean NPZ schema for BC consumption.
+
+Parameters live at the top of this file; no YAML config needed.
+GUI is off by default; see passive_walker/fsm/README.md for usage.
 """
 import os
 import json
