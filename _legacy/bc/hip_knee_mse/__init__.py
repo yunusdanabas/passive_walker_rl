@@ -19,7 +19,7 @@ import jax
 import equinox as eqx
 from passive_walker.controllers.nn.hip_knee_nn import HipKneeController
 
-from passive_walker.constants import (
+from constants import (
     ROOT,
     XML_PATH,
     DATA_DIR,

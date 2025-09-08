@@ -16,7 +16,7 @@ Usage:
     python -m passive_walker.bc.hip_mse.run_pipeline --gpu  # Run complete pipeline
 """
 
-from passive_walker.constants import (
+from constants import (
     ROOT,
     XML_PATH,
     DATA_DIR,

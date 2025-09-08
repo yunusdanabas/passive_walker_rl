@@ -30,7 +30,7 @@ from passive_walker.utils.walker_plotter import (
     plot_com_path,
     plot_feet_contact
 )
-from passive_walker.constants import XML_PATH, RESULTS
+from constants import XML_PATH, RESULTS
 
 def run_episode(model, model_type, sim_secs=30.0, hz=200):
     """Run episode with trained model and collect data."""

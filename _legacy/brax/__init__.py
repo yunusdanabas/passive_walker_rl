@@ -29,7 +29,7 @@ can just do::
 from __future__ import annotations
 from pathlib import Path
 
-from passive_walker.constants import ROOT, XML_PATH, DATA_DIR, set_device
+from constants import ROOT, XML_PATH, DATA_DIR, set_device
 
 __all__ = [
     "__version__",
