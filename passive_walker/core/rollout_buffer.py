@@ -39,12 +39,10 @@ class RolloutBuffer:
             self.extras = {}
             # Common reward keys from our reward system
             self.extras_keys = [
-                "r_forward",
-                "r_upright",
-                "r_vel",
-                "r_sym",
-                "r_clear",
-                "r_act_cost",
+                "r_dx",
+                "r_pitch",
+                "r_ctrl",
+                "r_alive",
                 "fell",
             ]
             for key in self.extras_keys:

@@ -3,6 +3,9 @@ JAX Controller for Passive Walker
 
 JIT-compiled PD control and quaternion utilities for high-performance
 computation. Mirrors controller.py parameters exactly.
+
+NOTE: This is the canonical JAX controller. See also passive_walker/jax/controller_jax.py
+for vectorized versions. Keep implementations in sync to avoid divergence.
 """
 from __future__ import annotations
 import jax

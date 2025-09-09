@@ -26,7 +26,7 @@ U_MAX = np.array([+50.0, +800.0, +800.0], dtype=np.float32)
 # FSM Parameters
 # =====================
 CONTACT_Z = 0.05           # Foot contact height threshold (m)
-KNEE_RELEASE = 0.10        # Knee release angle threshold (rad)
+KNEE_RELEASE = 0.10        # Leg forward progress threshold for knee release (rad)
 
 # Target positions
 HIP_SWING_POS = +0.5       # Hip forward target (rad)
@@ -76,15 +76,55 @@ def _slew(x: float, target: float, rate: float, dt: float) -> float:
 # PD Controller
 # =====================
 class PDController:
-    """PD controller with per-joint gains and action denormalization."""
+    """PD controller with per-joint gains and action denormalization.
     
-    def __init__(self):
+    Performance Notes:
+    - NumPy backend: Fastest for single-environment use cases (default)
+    - JAX backend: Better for vectorized/batched operations (opt-in)
+    - JAX overhead: ~15-20x slower for single env due to JIT compilation + array conversion
+    - JAX benefits: Shine with 32+ parallel environments or complex computations
+    """
+    
+    def __init__(self, use_jax: bool = False):
         self.kp = KP.copy()
         self.kd = KD.copy()
         self.umin = U_MIN.copy()
         self.umax = U_MAX.copy()
         self.jmin = JOINT_MIN.copy()
         self.jmax = JOINT_MAX.copy()
+        
+        # Backend selection: NumPy (fast) vs JAX (vectorized)
+        self._use_jax = False
+        self.backend_name = "numpy"  # Default backend name
+        if use_jax:
+            try:
+                import jax.numpy as jnp
+                from passive_walker.core.controller_jax import pd_step
+                
+                # Store JAX references for fast path
+                self._jnp = jnp
+                self._pd_step = pd_step  # Pre-JIT compiled function
+                
+                # Convert PD parameters to JAX arrays (compile once, use many)
+                self._kp_j   = jnp.asarray(self.kp,   dtype=jnp.float32)
+                self._kd_j   = jnp.asarray(self.kd,   dtype=jnp.float32)
+                self._umin_j = jnp.asarray(self.umin, dtype=jnp.float32)
+                self._umax_j = jnp.asarray(self.umax, dtype=jnp.float32)
+                
+                # Warmup compilation to avoid first-step JIT overhead
+                # This moves compilation cost to initialization, not runtime
+                q_warmup = jnp.zeros((3,), dtype=jnp.float32)
+                _ = self._pd_step(q_warmup, q_warmup, q_warmup, 
+                                self._kp_j, self._kd_j, self._umin_j, self._umax_j).block_until_ready()
+                
+                self._use_jax = True
+                self.backend_name = "jax"
+            except Exception:
+                # JAX not available or failed to import; fallback to NumPy
+                self._use_jax = False
+                if use_jax:
+                    # One-time notice so users know why it fell back
+                    print("[PassiveWalker] Requested --jax-pd, but JAX is unavailable; falling back to NumPy.")
 
     def denorm(self, i: int, a: float) -> float:
         """Convert normalized action [-1,1] to physical joint range."""
@@ -92,9 +132,32 @@ class PDController:
         return float(0.5 * (hi - lo) * (a + 1.0) + lo)
 
     def step(self, q: np.ndarray, qd: np.ndarray, qdes: np.ndarray) -> np.ndarray:
-        """Compute PD control: u = kp*(qdes-q) - kd*qd, clamped to limits."""
-        u = self.kp * (qdes - q) - self.kd * qd
-        return _clip(u, self.umin, self.umax)
+        """Compute PD control: u = kp*(qdes-q) - kd*qd, clamped to limits.
+        
+        Args:
+            q: Current joint positions (3,)
+            qd: Current joint velocities (3,)
+            qdes: Desired joint positions (3,)
+            
+        Returns:
+            Control torques (3,) - same format regardless of backend
+        """
+        if not self._use_jax:
+            # NumPy path: Fastest for single-environment use cases
+            u = self.kp * (qdes - q) - self.kd * qd
+            return _clip(u, self.umin, self.umax)
+        
+        # JAX path: Optimized for vectorized/batched operations
+        # Note: Array conversion overhead makes this slower for single env
+        jnp = self._jnp
+        u_j = self._pd_step(
+            jnp.asarray(q,    dtype=jnp.float32),
+            jnp.asarray(qd,   dtype=jnp.float32),
+            jnp.asarray(qdes, dtype=jnp.float32),
+            self._kp_j, self._kd_j, self._umin_j, self._umax_j
+        )
+        # Convert back to NumPy for MuJoCo compatibility
+        return np.asarray(u_j, dtype=np.float32)
 
 
 # =====================
@@ -116,6 +179,17 @@ class FSMStateMachine:
 
     def __init__(self):
         self.reset()
+        # Cached indices for performance (set by bind_indices)
+        self._qpos_hip = None
+        self._qpos_lk = None
+        self._qpos_rk = None
+        self._qvel_hip = None
+        self._qvel_lk = None
+        self._qvel_rk = None
+        self._b_lfoot = None
+        self._b_rfoot = None
+        self._b_lleg = None
+        self._b_rleg = None
 
     def reset(self):
         """Reset FSM to initial state."""
@@ -126,31 +200,69 @@ class FSMStateMachine:
         self.lk_qdes = None
         self.rk_qdes = None
 
+    def bind_indices(self, qpos_hip: int, qpos_lk: int, qpos_rk: int,
+                     qvel_hip: int, qvel_lk: int, qvel_rk: int,
+                     b_lfoot: int, b_rfoot: int, b_lleg: int, b_rleg: int):
+        """Bind MuJoCo indices for performance (call once from env.__init__)."""
+        self._qpos_hip = qpos_hip
+        self._qpos_lk = qpos_lk
+        self._qpos_rk = qpos_rk
+        self._qvel_hip = qvel_hip
+        self._qvel_lk = qvel_lk
+        self._qvel_rk = qvel_rk
+        self._b_lfoot = b_lfoot
+        self._b_rfoot = b_rfoot
+        self._b_lleg = b_lleg
+        self._b_rleg = b_rleg
+
     def _leg_pitch(self, data, body_id: int) -> float:
         """Get leg pitch angle from body quaternion (legacy convention)."""
         _, pitch, _ = _quat2euler_zyx_np(data.xquat[body_id])
         return float(-pitch)  # Negative for "leg forward" = positive
 
-    def update(self, data, model, b_lfoot: int, b_rfoot: int,
-               b_lleg: int | None = None, b_rleg: int | None = None):
+    def update(self, data, model, b_lfoot: int = None, b_rfoot: int = None,
+               b_lleg: int = None, b_rleg: int = None):
         """
         Update FSM states and compute desired joint positions.
         
         Args:
             data: MuJoCo data object
             model: MuJoCo model object
-            b_lfoot, b_rfoot: Left/right foot body IDs
-            b_lleg, b_rleg: Left/right leg body IDs (optional, for angle detection)
+            b_lfoot, b_rfoot: Left/right foot body IDs (optional if bound)
+            b_lleg, b_rleg: Left/right leg body IDs (optional if bound)
         """
         dt = float(model.opt.timestep)
 
-        # Read current joint positions
-        hip = float(data.qpos[model.jnt_qposadr[
-            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "hip")]])
-        lk = float(data.qpos[model.jnt_qposadr[
-            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "left_knee")]])
-        rk = float(data.qpos[model.jnt_qposadr[
-            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "right_knee")]])
+        # Use cached indices if available, otherwise fall back to parameters
+        if self._qpos_hip is not None:
+            # Fast path: use cached indices
+            hip = float(data.qpos[self._qpos_hip])
+            lk = float(data.qpos[self._qpos_lk])
+            rk = float(data.qpos[self._qpos_rk])
+            left_contact = data.xpos[self._b_lfoot, 2] < CONTACT_Z
+            right_contact = data.xpos[self._b_rfoot, 2] < CONTACT_Z
+            if (self._b_lleg is not None) and (self._b_rleg is not None):
+                abs_left = self._leg_pitch(data, self._b_lleg)
+                abs_right = self._leg_pitch(data, self._b_rleg)
+            else:
+                abs_left = -hip
+                abs_right = +hip
+        else:
+            # Fallback: use name lookups (slower)
+            hip = float(data.qpos[model.jnt_qposadr[
+                mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "hip")]])
+            lk = float(data.qpos[model.jnt_qposadr[
+                mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "left_knee")]])
+            rk = float(data.qpos[model.jnt_qposadr[
+                mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "right_knee")]])
+            left_contact = data.xpos[b_lfoot, 2] < CONTACT_Z
+            right_contact = data.xpos[b_rfoot, 2] < CONTACT_Z
+            if (b_lleg is not None) and (b_rleg is not None):
+                abs_left = self._leg_pitch(data, b_lleg)
+                abs_right = self._leg_pitch(data, b_rleg)
+            else:
+                abs_left = -hip
+                abs_right = +hip
 
         # Initialize desired positions on first call
         if self.hip_qdes is None:
@@ -158,18 +270,6 @@ class FSMStateMachine:
             self.lk_qdes = lk
             self.rk_qdes = rk
             self.fsm_hip = self.HIP_LEG1_SWING if hip < 0.0 else self.HIP_LEG2_SWING
-
-        # Contact detection
-        left_contact = data.xpos[b_lfoot, 2] < CONTACT_Z
-        right_contact = data.xpos[b_rfoot, 2] < CONTACT_Z
-
-        # Leg angle detection (quaternion-based or hip sign fallback)
-        if (b_lleg is not None) and (b_rleg is not None):
-            abs_left = self._leg_pitch(data, b_lleg)
-            abs_right = self._leg_pitch(data, b_rleg)
-        else:
-            abs_left = -hip
-            abs_right = +hip
 
         # Hip state transitions
         if self.fsm_hip == self.HIP_LEG2_SWING and right_contact and (abs_left < 0.0):

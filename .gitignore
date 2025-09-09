@@ -3,13 +3,21 @@ __pycache__/
 *.pyc
 
 # Data & results
-#data/**
+data/**
 results/**
-#
-## Model checkpoints & logs
+
+# Model checkpoints & logs
 *.pkl
 *.pkl.gz
 *.msgpack
+*.pt
+*.eqx
+*.npz
+
+# Training outputs
+checkpoints/
+logs/
+wandb/
 
 # Environment files
 .env
