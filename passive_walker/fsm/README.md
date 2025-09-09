@@ -40,6 +40,13 @@ Each `episode_*.npz` contains:
 * Headless, no randomness unless enabled at the top of `env.py`.
 * Re-running the same command yields byte-identical arrays.
 
+## Performance & Backends
+
+* **Default PD backend**: **NumPy** (best for single environment).
+* **Opt-in JAX**: `--jax-pd` (falls back to NumPy if JAX is unavailable).
+* **Environment default**: `PWALKER_PD_BACKEND=jax|numpy` (CLI flags win).
+* The collector records `pd_backend` and `ctrl_hz` in `meta.json`.
+
 ## Notes
 
 * All parameters live **at the top** of the respective Python files.

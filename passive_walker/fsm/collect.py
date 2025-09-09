@@ -17,7 +17,7 @@ from passive_walker.core.env import PassiveWalkerEnv
 # ---------- knobs (edit here) ----------
 DEFAULT_EPISODES = 10        # episodes to collect
 DEFAULT_STEPS = 512          # steps per episode (upper bound; episode may end earlier)
-DEFAULT_OUTDIR = "data/fsm"  # output directory
+DEFAULT_OUTDIR = "data/fsm_runs"  # output directory
 DEFAULT_SEED = 123           # base random seed
 DEFAULT_MODE = "fsm"         # don't change: collector assumes FSM
 PRINT_EVERY_SEC = 0.5        # console throttle
@@ -46,6 +46,9 @@ def collect(episodes, steps, outdir, seed=None):
     """
     os.makedirs(outdir, exist_ok=True)
 
+    # One env reused across episodes
+    env = PassiveWalkerEnv(mode=DEFAULT_MODE, use_gui=False)
+
     # Save metadata once
     if SAVE_META:
         meta = {
@@ -54,6 +57,8 @@ def collect(episodes, steps, outdir, seed=None):
             "seed": None if seed is None else int(seed),
             "env": "PassiveWalkerEnv",
             "mode": "fsm",
+            "pd_backend": env.pd.backend_name,
+            "ctrl_hz": env.ctrl_hz,
             "schema": {
                 "obs": "(T+1,11)",
                 "act": "(T,3)",
@@ -66,9 +71,6 @@ def collect(episodes, steps, outdir, seed=None):
         }
         with open(os.path.join(outdir, "meta.json"), "w") as f:
             json.dump(meta, f, indent=2)
-
-    # One env reused across episodes
-    env = PassiveWalkerEnv(mode=DEFAULT_MODE, use_gui=False)
 
     for ep in range(episodes):
         # Deterministic per-episode seed (nice for reproducibility & sharding)

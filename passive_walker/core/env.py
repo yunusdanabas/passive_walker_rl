@@ -5,7 +5,7 @@ Bipedal walking environment with FSM and neural network control modes.
 Supports both headless and GUI operation with proper physics simulation.
 
 Parameters live at the top of this file; no YAML config needed.
-GUI is off by default; use --gui flag when running as module.
+GUI is on by default; use --no-gui flag when running headless.
 See passive_walker/fsm/README.md for usage examples.
 """
 from __future__ import annotations
@@ -31,7 +31,7 @@ CAM_DISTANCE = 8.0      # Camera distance from walker
 
 # Observation and action dimensions
 _OBS_DIM = 11  # [x, z, pitch, ẋ, ż, hip, lk, rk, hiṗ, lk̇, rk̇]
-_ACT_DIM = 3   # [hip, left_knee, right_knee]
+_ACT_DIM = 3   # [hip, left_knee, right_knee] - knee sliders (m)
 
 
 import numpy as np
@@ -55,7 +55,7 @@ class PassiveWalkerEnv(gym.Env):
 
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self, mode: str = "fsm", use_gui: bool = False):
+    def __init__(self, mode: str = "fsm", use_gui: bool = False, use_jax_pd: bool = False):
         super().__init__()
         assert mode in ("fsm", "research")
         self.mode = mode
@@ -74,8 +74,18 @@ class PassiveWalkerEnv(gym.Env):
         self.action_space = spaces.Box(-1.0, 1.0, shape=(_ACT_DIM,), dtype=np.float32)
 
         # Initialize controllers
-        self.pd = PDController()
+        # PD Controller: NumPy (fast) vs JAX (vectorized) backend selection
+        # NumPy is default for single-environment performance
+        self.pd = PDController(use_jax=use_jax_pd)
         self.fsm = FSMStateMachine()
+        
+        # Bind FSM indices for performance (after model is loaded)
+        self.fsm.bind_indices(
+            qpos_hip=self.qpos_hip, qpos_lk=self.qpos_lk, qpos_rk=self.qpos_rk,
+            qvel_hip=self.qvel_hip, qvel_lk=self.qvel_lk, qvel_rk=self.qvel_rk,
+            b_lfoot=self.b_lfoot, b_rfoot=self.b_rfoot,
+            b_lleg=self.b_lleg, b_rleg=self.b_rleg
+        )
 
         # Initialize reward function
         self.reward_fn = get_reward_fn(self.mode)
@@ -88,6 +98,9 @@ class PassiveWalkerEnv(gym.Env):
         self._u = np.empty(3, dtype=np.float32)
 
         self.prev_x = 0.0
+        self._t_next = 0.0  # Target time for next control step
+        self._seed_used = None  # Track seed for dataset provenance
+        self._timing_debug = False  # Enable timing debug logging
 
         if self.use_gui:
             self._ensure_window()
@@ -134,6 +147,9 @@ class PassiveWalkerEnv(gym.Env):
 
         # Apply base physics (gravity, friction)
         self._apply_base_physics()
+        
+        # Cache original torso mass for domain randomization
+        self._torso_mass0 = float(self.model.body_mass[self.b_torso])
 
     def _apply_base_physics(self):
         """Set up base physics parameters (gravity, friction)."""
@@ -146,15 +162,15 @@ class PassiveWalkerEnv(gym.Env):
         assert self._np_rng is not None
         # Apply base physics
         self._apply_base_physics()
-        # Randomize torso mass
-        base_mass = float(self.model.body_mass[self.b_torso])
+        # Randomize torso mass from original (prevents drift across resets)
         scale = self._np_rng.uniform(1.0 - MASS_JITTER, 1.0 + MASS_JITTER)
-        self.model.body_mass[self.b_torso] = base_mass * scale
+        self.model.body_mass[self.b_torso] = self._torso_mass0 * scale
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         """Reset environment to initial state."""
         if seed is not None or self._np_rng is None:
             self._np_rng = np.random.RandomState(None if seed is None else int(seed))
+            self._seed_used = seed
 
         mujoco.mj_resetData(self.model, self.data)
         self.fsm.reset()
@@ -174,6 +190,7 @@ class PassiveWalkerEnv(gym.Env):
         mujoco.mj_forward(self.model, self.data)
         self.data.time = 0.0
         self.prev_x = float(self.data.qpos[self.dof_x])
+        self._t_next = 1.0 / self.ctrl_hz  # First control step target
 
         return self._get_obs(), {}
 
@@ -187,11 +204,11 @@ class PassiveWalkerEnv(gym.Env):
         ob[3] = qvel[self.dof_x]      # x velocity
         ob[4] = qvel[self.dof_z]      # z velocity
         ob[5] = qpos[self.qpos_hip]   # hip angle
-        ob[6] = qpos[self.qpos_lk]    # left knee position
-        ob[7] = qpos[self.qpos_rk]    # right knee position
+        ob[6] = qpos[self.qpos_lk]    # left knee slider (m)
+        ob[7] = qpos[self.qpos_rk]    # right knee slider (m)
         ob[8] = qvel[self.qvel_hip]   # hip angular velocity
-        ob[9] = qvel[self.qvel_lk]    # left knee velocity
-        ob[10] = qvel[self.qvel_rk]   # right knee velocity
+        ob[9] = qvel[self.qvel_lk]    # left knee slider velocity (m/s)
+        ob[10] = qvel[self.qvel_rk]   # right knee slider velocity (m/s)
         return ob
 
     def step(self, action: np.ndarray):
@@ -201,9 +218,8 @@ class PassiveWalkerEnv(gym.Env):
         self._q[:] = [qpos[self.qpos_hip], qpos[self.qpos_lk], qpos[self.qpos_rk]]
         self._qd[:] = [qvel[self.qvel_hip], qvel[self.qvel_lk], qvel[self.qvel_rk]]
 
-        # Update FSM with leg body IDs for accurate angle detection
-        self.fsm.update(self.data, self.model, self.b_lfoot, self.b_rfoot,
-                        self.b_lleg, self.b_rleg)
+        # Update FSM (uses cached indices for performance)
+        self.fsm.update(self.data, self.model)
 
         # Compute desired joint positions
         if self.mode == "fsm":
@@ -217,19 +233,32 @@ class PassiveWalkerEnv(gym.Env):
             self._qdes[1] = self.pd.denorm(1, float(action[1]))
             self._qdes[2] = self.pd.denorm(2, float(action[2]))
 
-        # Integrate multiple micro-steps to match control frequency
-        sim_steps = max(1, int((1.0 / self.ctrl_hz) / self.model.opt.timestep))
-        for _ in range(sim_steps):
+        # Integrate micro-steps until target control time is reached
+        n_microsteps = 0
+        while self.data.time + 1e-12 < self._t_next:
             self._u[:] = self.pd.step(self._q, self._qd, self._qdes)
             self.data.ctrl[self.a_hip] = self._u[0]
             self.data.ctrl[self.a_lk] = self._u[1]
             self.data.ctrl[self.a_rk] = self._u[2]
             mujoco.mj_step(self.model, self.data)
+            n_microsteps += 1
 
             # Update joint states for next micro-step
             qpos, qvel = self.data.qpos, self.data.qvel
             self._q[:] = [qpos[self.qpos_hip], qpos[self.qpos_lk], qpos[self.qpos_rk]]
             self._qd[:] = [qvel[self.qvel_hip], qvel[self.qvel_lk], qvel[self.qvel_rk]]
+
+        # Timing debug logging (first few steps only)
+        if self._timing_debug and self.data.time < 3.0:
+            target_dt = 1.0 / self.ctrl_hz
+            timestep = self.model.opt.timestep
+            time_error = abs(self.data.time - self._t_next)
+            if n_microsteps <= 5:  # Only log first few steps
+                print(f"Timing: target_dt={target_dt:.4f}, timestep={timestep:.4f}, "
+                      f"n_microsteps={n_microsteps}, time_error={time_error:.6f}")
+
+        # Set next control step target
+        self._t_next += 1.0 / self.ctrl_hz
 
         # Compute reward and termination
         current_x = float(self.data.qpos[self.dof_x])
@@ -255,7 +284,16 @@ class PassiveWalkerEnv(gym.Env):
             "dx": dx,
             "pitch_abs": pitch_abs,
             "torso_z": torso_z,
+            "u_abs_sum": ctrl_abs_sum,
+            "u": self._u.copy(),
+            "qdes": self._qdes.copy(),
+            "fsm_hip": self.fsm.fsm_hip,
+            "fsm_k1": self.fsm.fsm_knee1,
+            "fsm_k2": self.fsm.fsm_knee2,
         }
+        # Add seed info on first step for dataset provenance
+        if self._seed_used is not None and "seed" not in info:
+            info["seed"] = self._seed_used
         info.update(rinfo)
         return self._get_obs(), float(reward), done, info
 
@@ -319,9 +357,23 @@ def main():
                         help="Disable GUI")
     parser.set_defaults(gui=DEFAULT_GUI)
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
+    
+    # PD Backend selection (mutually exclusive)
+    # Default: NumPy (fastest for single environment)
+    # JAX: Better for vectorized/batched operations
+    backend_group = parser.add_mutually_exclusive_group()
+    backend_group.add_argument("--jax-pd", action="store_true",
+                              help="use JAX PD backend (JIT-compiled, better for vectorized operations)")
+    backend_group.add_argument("--numpy-pd", action="store_true",
+                              help="use NumPy PD backend (default, fastest for single environment)")
     args = parser.parse_args()
 
-    env = PassiveWalkerEnv(mode=args.mode, use_gui=args.gui)
+    # Determine backend: Check environment variable first, then CLI flags
+    import os
+    env_default = os.environ.get("PWALKER_PD_BACKEND", "numpy").lower()
+    env_wants_jax = (env_default == "jax")
+    use_jax_pd = (args.jax_pd or (env_wants_jax and not args.numpy_pd))
+    env = PassiveWalkerEnv(mode=args.mode, use_gui=args.gui, use_jax_pd=use_jax_pd)
     env.simend = float(args.seconds)
 
     obs, _ = env.reset(seed=args.seed)
@@ -353,6 +405,8 @@ def main():
                 steps = 0
             env.render()
     finally:
+        # Print backend once at end
+        print(f"[PassiveWalker] PD backend: {env.pd.backend_name}")
         env.close()
 
 

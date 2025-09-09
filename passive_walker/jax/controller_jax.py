@@ -3,6 +3,9 @@ JAX-based PD controller for vectorized control computations.
 
 Provides vmap-ready PD control functions that can be efficiently batched
 for vectorized environment steps and PPO training.
+
+NOTE: See passive_walker/core/controller_jax.py for the canonical JAX controller.
+This module provides vectorized versions for batch processing.
 """
 
 import jax

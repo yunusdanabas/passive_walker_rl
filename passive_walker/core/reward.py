@@ -14,16 +14,16 @@ ALIVE_Z_MIN    = 0.90   # m: small alive bonus if above this
 # -------------------- Weights (kept tiny, per mode) --------------------
 # Signals used: dx (forward progress), pitch_abs, u_abs_sum, torso_z
 WEIGHTS_FSM = dict(
-    w_dx=1.0,     # reward for forward progress per step
-    w_pitch=0.2,  # penalty for absolute pitch
-    w_ctrl=0.001, # penalty for control effort (sum |u|)
-    w_alive=0.10, # alive bonus when torso high enough
+    w_dx=2.0,     # reward for forward progress per step
+    w_pitch=0.1,  # penalty for absolute pitch
+    w_ctrl=0.0005, # penalty for control effort (sum |u|)
+    w_alive=0.20, # alive bonus when torso high enough
 )
 
 WEIGHTS_RESEARCH = dict(
-    w_dx=2.0,
-    w_pitch=0.5,
-    w_ctrl=0.003,
+    w_dx=5.0,
+    w_pitch=0.1,
+    w_ctrl=0.0005,
     w_alive=0.20,
 )
 
@@ -55,6 +55,9 @@ def _reward(signals: Dict[str, float], w: Dict[str, float]) -> Tuple[float, Dict
         "r_ctrl": -w["w_ctrl"] * u_sum,
         "r_alive": alive,
     }
+
+    # print(f"r: {r}, info: {info}")
+
     return float(r), info
 
 def compute_reward(signals: Dict[str, float], mode: str = "fsm") -> Tuple[float, Dict[str, float]]:
