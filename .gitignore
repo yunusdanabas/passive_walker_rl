@@ -22,3 +22,16 @@ wandb/
 # Environment files
 .env
 
+# Hidden files and directories
+.*
+!.gitignore
+!.github/
+
+# Cursor IDE files
+.cursor/
+
+# Python cache and test files
+.pytest_cache/
+.coverage
+htmlcov/
+
