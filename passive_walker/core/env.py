@@ -320,25 +320,49 @@ class PassiveWalkerEnv(gym.Env):
         """Initialize GUI window and rendering context."""
         if self.window is not None:
             return
+        
+        # Initialize GLFW
         if not glfw.init():
             raise RuntimeError("GLFW initialization failed")
-        self.window = glfw.create_window(1200, 900, "Passive Walker", None, None)
+        
+        # Set GLFW hints for better compatibility
+        glfw.window_hint(glfw.VISIBLE, glfw.TRUE)
+        glfw.window_hint(glfw.FOCUSED, glfw.TRUE)
+        glfw.window_hint(glfw.RESIZABLE, glfw.TRUE)
+        
+        # Try to create window
+        self.window = glfw.create_window(1200, 900, "Passive Walker - v2.1", None, None)
         if not self.window:
             glfw.terminate()
-            raise RuntimeError("Window creation failed")
+            raise RuntimeError("Window creation failed - check display server (X11/Wayland)")
+        
+        # Make window visible and focused
         glfw.make_context_current(self.window)
+        glfw.show_window(self.window)
+        glfw.focus_window(self.window)
         glfw.swap_interval(1)
+        
+        # Initialize MuJoCo rendering components
         self.cam = mujoco.MjvCamera()
         self.cam.distance = float(CAM_DISTANCE)
         self.opt = mujoco.MjvOption()
         self.scene = mujoco.MjvScene(self.model, maxgeom=10000)
         self.ctx = mujoco.MjrContext(self.model, mujoco.mjtFontScale.mjFONTSCALE_150.value)
+        
+        print(f"✅ GUI window created: 1200x900, title='Passive Walker - v2.1'")
+        print(f"💡 Tip: If you don't see the window, try Alt+Tab or check if it's behind other windows")
+        print(f"💡 On Wayland: The window might be created but not visible due to display server limitations")
 
     def render(self, mode: str = "human"):
         """Render the current state."""
         if not self.use_gui:
             return
         self._ensure_window()
+        
+        # Check if window is still valid
+        if glfw.window_should_close(self.window):
+            return
+            
         w, h = glfw.get_framebuffer_size(self.window)
         viewport = mujoco.MjrRect(0, 0, w, h)
         self.cam.lookat[0] = self.data.qpos[0]
@@ -392,7 +416,19 @@ def main():
     env_default = os.environ.get("PWALKER_PD_BACKEND", "numpy").lower()
     env_wants_jax = (env_default == "jax")
     use_jax_pd = (args.jax_pd or (env_wants_jax and not args.numpy_pd))
-    env = PassiveWalkerEnv(mode=args.mode, use_gui=args.gui, use_jax_pd=use_jax_pd)
+    # Try GUI first, fallback to headless if it fails
+    use_gui = args.gui
+    if use_gui:
+        try:
+            env = PassiveWalkerEnv(mode=args.mode, use_gui=True, use_jax_pd=use_jax_pd)
+            print("✅ GUI mode enabled")
+        except Exception as e:
+            print(f"⚠️  GUI failed: {e}")
+            print("🔄 Falling back to headless mode...")
+            use_gui = False
+            env = PassiveWalkerEnv(mode=args.mode, use_gui=False, use_jax_pd=use_jax_pd)
+    else:
+        env = PassiveWalkerEnv(mode=args.mode, use_gui=False, use_jax_pd=use_jax_pd)
     env.simend = float(args.seconds)
 
     obs, _ = env.reset(seed=args.seed)
@@ -406,7 +442,7 @@ def main():
     try:
         done = False
         while not done:
-            if args.gui and env.window is not None and glfw.window_should_close(env.window):
+            if use_gui and env.window is not None and glfw.window_should_close(env.window):
                 break
             obs, r, done, info = env.step(zero)
             rsum += r
