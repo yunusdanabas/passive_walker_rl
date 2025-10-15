@@ -1,6 +1,8 @@
-# Passive Walker RL Environment
+# Passive Walker RL Environment v2.0
 
 A unified, high-performance reinforcement learning environment for a Variable Length Leg (VLL) bipedal walker using MuJoCo physics simulation.
+
+> **Version 2.0** - Major workspace reorganization with clean codebase, modernized training pipeline, and comprehensive testing suite.
 
 ## Quick Start
 
