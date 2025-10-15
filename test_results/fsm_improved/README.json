@@ -1,0 +1,26 @@
+{
+  "episode_count": 1,
+  "length_stats": {
+    "mean": 96.0,
+    "median": 96.0,
+    "std": 0.0,
+    "min": 96,
+    "max": 96
+  },
+  "gait_cycle_stats": {
+    "mean": 33.0,
+    "min": 33,
+    "max": 33
+  },
+  "distance_stats": {
+    "mean": 1.0571777820587158,
+    "max": 1.0571777820587158
+  },
+  "quality_flags": {
+    "fall_rate": 1.0,
+    "max_pitch": 1.0091781616210938,
+    "short_episodes": 1,
+    "low_cycle_episodes": 0,
+    "high_pitch_episodes": 1
+  }
+}
