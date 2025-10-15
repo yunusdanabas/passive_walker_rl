@@ -3,13 +3,15 @@ Test FSM walking for 20+ seconds (critical success requirement).
 """
 import numpy as np
 import pytest
+import argparse
+import sys
 from passive_walker.core.env import PassiveWalkerEnv
 
 
 @pytest.mark.slow
-def test_fsm_20_second_walking():
+def test_fsm_20_second_walking(use_gui=False):
     """Test that FSM can walk for at least 20 seconds without falling."""
-    env = PassiveWalkerEnv(mode="fsm", use_gui=False)
+    env = PassiveWalkerEnv(mode="fsm", use_gui=use_gui)
     
     try:
         obs, _ = env.reset(seed=123)
@@ -24,11 +26,19 @@ def test_fsm_20_second_walking():
         total_distance = 0.0
         initial_x = obs[0]
         
-        print(f"Testing 20-second FSM walking (target: {target_steps} steps)...")
+        mode_str = "GUI" if use_gui else "headless"
+        print(f"Testing 20-second FSM walking in {mode_str} mode (target: {target_steps} steps)...")
+        
+        if use_gui:
+            print("  GUI Mode: Watch the simulation window - it will run for 20 seconds...")
         
         while step_count < target_steps:
             obs, reward, done, info = env.step(zero_action)
             step_count += 1
+            
+            # Render GUI if enabled
+            if use_gui:
+                env.render()
             
             # Track gait cycles
             current_hip_state = env.fsm.fsm_hip
@@ -64,6 +74,29 @@ def test_fsm_20_second_walking():
         
     finally:
         env.close()
+
+
+@pytest.mark.slow
+def test_fsm_20_second_walking_gui():
+    """Test 20-second FSM walking with GUI for visual verification."""
+    print("\n" + "="*60)
+    print("GUI MODE: 20-second FSM walking test")
+    print("="*60)
+    print("You should see a MuJoCo window with the walking simulation.")
+    print("The test will run for 20 seconds - watch for stable walking gait.")
+    print("Press Ctrl+C if you need to interrupt.")
+    print("="*60)
+    
+    test_fsm_20_second_walking(use_gui=True)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("use_gui", [False, True], ids=["headless", "gui"])
+def test_fsm_20_second_walking_parametrized(use_gui):
+    """Parametrized test for both headless and GUI modes."""
+    if use_gui:
+        print(f"\n🎬 Running GUI test - watch the simulation window!")
+    test_fsm_20_second_walking(use_gui=use_gui)
 
 
 @pytest.mark.slow
@@ -132,3 +165,46 @@ def test_fsm_quick_smoke():
         
     finally:
         env.close()
+
+
+def main():
+    """CLI entry point for running 20-second walking test with options."""
+    parser = argparse.ArgumentParser("20-Second FSM Walking Test")
+    parser.add_argument("--gui", action="store_true", default=False,
+                       help="Run with GUI for visual verification")
+    parser.add_argument("--quick", action="store_true", 
+                       help="Run quick 5-second smoke test instead")
+    parser.add_argument("--seeds", action="store_true",
+                       help="Run multiple seeds robustness test")
+    args = parser.parse_args()
+    
+    if args.quick:
+        print("Running quick smoke test...")
+        test_fsm_quick_smoke()
+    elif args.seeds:
+        print("Running multiple seeds robustness test...")
+        test_fsm_20_second_multiple_seeds()
+    else:
+        print(f"Running 20-second walking test (GUI: {args.gui})...")
+        if args.gui:
+            print("\n" + "="*60)
+            print("GUI MODE: 20-second FSM walking test")
+            print("="*60)
+            print("You should see a MuJoCo window with the walking simulation.")
+            print("The test will run for 20 seconds - watch for stable walking gait.")
+            print("Press Ctrl+C if you need to interrupt.")
+            print("="*60)
+        
+        try:
+            test_fsm_20_second_walking(use_gui=args.gui)
+            print("\n✅ SUCCESS: 20-second walking test passed!")
+        except KeyboardInterrupt:
+            print("\n⚠️  Test interrupted by user")
+            sys.exit(1)
+        except Exception as e:
+            print(f"\n❌ FAILED: {e}")
+            sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
