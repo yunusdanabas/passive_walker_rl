@@ -25,7 +25,7 @@ U_MAX = np.array([+50.0, +800.0, +800.0], dtype=np.float32)
 # =====================
 # FSM Parameters
 # =====================
-CONTACT_Z = 0.05           # Foot contact height threshold (m)
+CONTACT_Z = 0.06           # Foot contact height threshold (m)
 KNEE_RELEASE = 0.10        # Leg forward progress threshold for knee release (rad)
 
 # Target positions
@@ -244,6 +244,13 @@ class FSMStateMachine:
             if (self._b_lleg is not None) and (self._b_rleg is not None):
                 abs_left = self._leg_pitch(data, self._b_lleg)
                 abs_right = self._leg_pitch(data, self._b_rleg)
+                
+                # Fallback: If leg bodies don't rotate meaningfully, use hip angle
+                # Check if left leg pitch is always near zero (identity quaternion issue)
+                if abs(abs_left) < 0.01:  # Left leg body not rotating
+                    abs_left = -hip  # Use hip angle instead
+                if abs(abs_right) < 0.01:  # Right leg body not rotating  
+                    abs_right = +hip  # Use hip angle instead
             else:
                 abs_left = -hip
                 abs_right = +hip
@@ -260,6 +267,12 @@ class FSMStateMachine:
             if (b_lleg is not None) and (b_rleg is not None):
                 abs_left = self._leg_pitch(data, b_lleg)
                 abs_right = self._leg_pitch(data, b_rleg)
+                
+                # Fallback: If leg bodies don't rotate meaningfully, use hip angle
+                if abs(abs_left) < 0.01:  # Left leg body not rotating
+                    abs_left = -hip  # Use hip angle instead
+                if abs(abs_right) < 0.01:  # Right leg body not rotating  
+                    abs_right = +hip  # Use hip angle instead
             else:
                 abs_left = -hip
                 abs_right = +hip
