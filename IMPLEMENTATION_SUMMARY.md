@@ -1,10 +1,28 @@
 # Implementation Summary: Passive Walker v2.1 Development
 
-This document summarizes all changes, fixes, and improvements made during the development of Passive Walker v2.1, covering Phases 1-3 of the testing and fixing plan.
+This document provides a comprehensive summary of all changes, fixes, and improvements made during the development of Passive Walker v2.1, covering Phases 1-3 of the testing and fixing plan. This document is designed to enable another LLM to understand the complete context and continue development seamlessly.
 
-## Overview
+## Project Overview
+
+**Project**: Passive Walker Reinforcement Learning Environment  
+**Version**: v2.1 (upgrading from v2.0)  
+**Repository**: `/home/yunusdanabas/passive_walker_rl`  
+**Environment**: Python 3.10 with mamba environment "main"  
 
 The development focused on testing, fixing, and organizing the `@/core`, `@/fsm`, and `@/bc` folders with a step-by-step approach. Each phase required user approval before proceeding, ensuring quality and alignment with requirements.
+
+### Original Problem List (11 Issues Identified)
+1. **BC models fail quickly** (<5s survival) - CRITICAL SUCCESS CRITERION
+2. **FSM state machine stuck** (hip transitions not working)
+3. **FSM outputs extreme values** (instant ±0.5 rad hip jumps)
+4. **BC training hyperparameters** (epochs, learning rate, batch size)
+5. **BC training convergence** (early stopping, loss functions)
+6. **Insufficient FSM data quality** (episode length, gait cycles)
+7. **GUI not working** (walker-demo --gui shows no window)
+8. **Legacy BC comparison** (performance against _legacy/bc/)
+9. **Domain randomization** (physics parameter ranges)
+10. **Action denormalization bug** (BC outputs not properly scaled)
+11. **Test suite failures** (API changes from --steps to --duration)
 
 **Key Success Criteria:**
 - ✅ Model must walk for at least 20 seconds to count as successful
@@ -284,42 +302,135 @@ pytest tests/ -v -k "fsm"
 - `fsm_state_transitions.png` - State transition patterns over time
 - `fsm_state_statistics.png` - Statistical analysis of state patterns
 
-## Git History
+## Current Repository State
 
+### Git History
 **Commits Made**:
 1. "feat: add setup.py for v2.1 installation"
 2. "fix: core environment and GUI rendering - closes #7"
 3. "fix: FSM state machine transitions and outputs - closes #2, #3"
 4. "fix: FSM output analysis and slew rate investigation"
 5. "test: visual FSM testing with GUI - stable walking confirmed"
+6. "docs: complete FSM module documentation and implementation summary"
 
-**Branch Status**: 8 commits ahead of origin/master
+**Branch Status**: 9 commits ahead of origin/master
 
-## Next Steps (Phases 4-8)
+### File Structure Status
+```
+/home/yunusdanabas/passive_walker_rl/
+├── setup.py                           # ✅ Created - package installation
+├── passive_walker/
+│   ├── core/
+│   │   ├── env.py                     # ✅ Modified - GUI fixes + fallback
+│   │   ├── controller.py              # ✅ Modified - FSM fixes + documentation
+│   │   └── README.md                  # ✅ Created - comprehensive docs
+│   ├── fsm/
+│   │   ├── collect.py                 # ✅ Working - data collection
+│   │   └── README.md                  # ✅ Created - comprehensive docs
+│   ├── bc/                            # ⏳ Pending - Phase 4-6 work
+│   └── ppo/                           # ⏳ Not modified
+├── tests/
+│   ├── test_fsm_*.py                  # ✅ All passing (12/12 tests)
+│   ├── test_20_second_walking.py      # ✅ Created - critical success test
+│   └── test_physics_conditions.py     # ✅ Fixed - pytest warnings
+├── test_results/                      # ✅ Contains FSM test data
+├── data/                              # ⏳ Ready for BC data collection
+├── checkpoints/                       # ⏳ Ready for BC model checkpoints
+└── [analysis files]                   # ✅ Generated plots and summaries
+```
 
-### Phase 4: BC Data Collection
-- Collect 200 high-quality FSM episodes with 25s duration
-- Validate collected data schema and quality metrics
+### Environment Setup
+**Current Environment**: `mamba activate main`  
+**Package Status**: `pip install -e .` completed successfully  
+**Console Scripts Available**:
+- `walker-collect-fsm` - FSM data collection
+- `walker-demo` - Environment demo with GUI
+- `walker-train-bc` - BC training (not yet tested)
+- `walker-train-ppo` - PPO training (not yet tested)
+
+## Next Steps (Phases 4-8) - Ready for Continuation
+
+### Phase 4: BC Data Collection (IMMEDIATE NEXT)
+**Status**: Ready to start - FSM is fully validated and documented
+
+**Tasks**:
+1. **Collect high-quality FSM training data**:
+   ```bash
+   cd /home/yunusdanabas/passive_walker_rl
+   mamba activate main
+   python -m passive_walker.fsm.collect --episodes 200 --duration 25.0 --physics nominal --out data/fsm_training_v2.1
+   ```
+
+2. **Validate data quality**:
+   - Check fall rate <10% in `data/fsm_training_v2.1/README.json`
+   - Verify gait cycles >8 per 10 seconds
+   - Run schema validation: `pytest tests/test_fsm_collect_schema.py -v`
+
+**Expected Outcome**: 200 episodes of 25s each with high-quality walking data
 
 ### Phase 5: BC Training
-- Fix BC training hyperparameters and action denormalization bug
-- Train hip-only BC model with improved settings
-- Evaluate BC model with visual inspection
+**Dependencies**: Phase 4 completion
 
-### Phase 6: BC Evaluation
-- Test BC model performance (20+ second criterion)
-- Compare against legacy BC implementation
-- Document BC module
+**Tasks**:
+1. **Fix BC training hyperparameters** (Problems #4, #5):
+   - Edit `passive_walker/bc/pipeline_config.yaml`
+   - Increase epochs: 30 → 100
+   - Adjust learning rate: 0.001 → 0.0005
+   - Start with `section: "hip"` (simplest task)
+
+2. **Fix action denormalization bug** (Problem #10):
+   - Review `passive_walker/bc/play.py` lines 19-64
+   - Ensure BC outputs treated as normalized [-1,1]
+   - Compare against `_legacy/bc/` if needed
+
+3. **Train hip-only BC model**:
+   ```bash
+   python -m passive_walker.bc.train --data data/fsm_training_v2.1 --section hip --epochs 100 --batch 512 --lr 0.0005 --save-dir checkpoints/bc_hip_v2.1
+   ```
+
+### Phase 6: BC Evaluation (CRITICAL)
+**Dependencies**: Phase 5 completion
+
+**Tasks**:
+1. **Test BC model performance** (Problem #1 - CRITICAL SUCCESS CRITERION):
+   ```bash
+   # Terminal evaluation (fast)
+   python -m passive_walker.bc.play --ckpt checkpoints/bc_hip_v2.1/checkpoint.pt --meta checkpoints/bc_hip_v2.1/meta.json --episodes 10 --seconds 25.0 --headless
+   
+   # Visual evaluation (GUI)
+   python -m passive_walker.bc.play --ckpt checkpoints/bc_hip_v2.1/checkpoint.pt --meta checkpoints/bc_hip_v2.1/meta.json --episodes 3 --seconds 25.0
+   ```
+
+2. **Success criteria** (CRITICAL):
+   - ✅ Walker survives >20 seconds (user requirement)
+   - ✅ Achieves forward progress
+   - ✅ Success rate >50%
+
+3. **Compare against legacy BC** (Problem #8):
+   - Load legacy BC model from `_legacy/bc/` if available
+   - Compare success rates and walking quality
 
 ### Phase 7: Integration Testing
-- Run full test suite and fix any failures
-- Update tests for API changes
-- Run end-to-end smoke tests
+**Dependencies**: Phase 6 completion
+
+**Tasks**:
+1. **Run full test suite**:
+   ```bash
+   pytest tests/ -v -m "not slow"  # Fast tests
+   pytest tests/ -v  # All tests including slow ones
+   ```
+
+2. **Fix remaining test failures** (Problem #11):
+   - Update any tests using old `--steps` API to `--duration`
+   - Fix hardcoded expectations
 
 ### Phase 8: Final Documentation
-- Create root CHANGELOG.md
-- Complete all component READMEs
-- Create quick start guide
+**Dependencies**: All previous phases
+
+**Tasks**:
+1. **Create root CHANGELOG.md** documenting v2.0 to v2.1 changes
+2. **Complete BC module documentation**: `passive_walker/bc/README.md`
+3. **Create quick start guide** with examples
 
 ## Success Criteria Met
 
@@ -338,8 +449,410 @@ pytest tests/ -v -k "fsm"
 - ✅ **State analysis**: Comprehensive understanding of FSM behavior
 - ✅ **BC training insights**: State-based training approach identified
 
+## Key Commands for Next LLM
+
+### Immediate Next Actions (Phase 4)
+```bash
+# 1. Navigate to project directory
+cd /home/yunusdanabas/passive_walker_rl
+
+# 2. Activate environment
+mamba activate main
+
+# 3. Collect FSM training data (Phase 4.1)
+python -m passive_walker.fsm.collect --episodes 200 --duration 25.0 --physics nominal --out data/fsm_training_v2.1
+
+# 4. Validate data quality
+pytest tests/test_fsm_collect_schema.py -v
+
+# 5. Check data quality report
+cat data/fsm_training_v2.1/README.json
+```
+
+### Critical Files to Review
+- `passive_walker/bc/pipeline_config.yaml` - BC training hyperparameters
+- `passive_walker/bc/play.py` lines 19-64 - Action denormalization bug
+- `_legacy/bc/` - Legacy BC implementation for comparison
+
+### Test Commands Available
+```bash
+# FSM tests (all passing)
+pytest tests/test_fsm_*.py -v
+
+# 20-second walking test (critical success criterion)
+python tests/test_20_second_walking.py --gui
+
+# GUI demo
+python -m passive_walker.core.env --mode fsm --seconds 10 --gui
+```
+
+## Context for Next LLM
+
+### What's Been Accomplished
+- ✅ **FSM controller fully working**: 20+ second walking, 0% fall rate
+- ✅ **GUI rendering fixed**: Robust with fallback mechanism
+- ✅ **FSM discontinuities understood**: Design constraint, not bug
+- ✅ **State-based BC training approach identified**: Avoids discontinuity issues
+- ✅ **Comprehensive documentation**: Core and FSM modules documented
+- ✅ **Test suite validated**: All FSM tests passing
+
+### What Needs to Be Done
+- ⏳ **BC data collection**: 200 episodes of 25s each (Phase 4)
+- ⏳ **BC training fixes**: Hyperparameters and action denormalization (Phase 5)
+- ⏳ **BC evaluation**: 20+ second walking criterion (Phase 6) - CRITICAL
+- ⏳ **Integration testing**: Full test suite (Phase 7)
+- ⏳ **Final documentation**: BC module docs and CHANGELOG (Phase 8)
+
+### Critical Success Criterion
+**The BC model must achieve 20+ second walking episodes to be considered successful.** This is the primary goal of the entire project.
+
+### User Preferences
+- Keep all code simple and readable
+- Visual testing with GUI verification
+- Step-by-step approach with user approval
+- Git commits at each milestone
+- Brief documentation for each component
+
 ## Conclusion
 
 Phases 1-3 of the Passive Walker v2.1 development have been successfully completed. The FSM controller is now fully tested, documented, and ready for BC data collection. Key discoveries about FSM discontinuities and state-based training approaches provide a solid foundation for the remaining phases.
 
-The implementation maintains simplicity while providing robust functionality and comprehensive documentation. All critical success criteria have been met, and the system is ready for the next phase of development.
+The implementation maintains simplicity while providing robust functionality and comprehensive documentation. All critical success criteria have been met for the FSM component, and the system is ready for BC data collection and training.
+
+**The next LLM should start with Phase 4: BC Data Collection using the commands provided above.**
+
+---
+
+## Original Plan Document
+
+The following is the complete original plan that was followed for this implementation:
+
+```markdown
+# Testing and Fixing Passive Walker v2.1
+
+## Phase 1: Setup and Installation
+
+### 1.1 Create setup.py
+
+Create minimal `setup.py` for proper pip installation based on existing egg-info structure at `/home/yunusdanabas/passive_walker_rl/passive_walker_rl.egg-info/`.
+
+**Files:** `setup.py`
+
+### 1.2 Install package
+
+```bash
+mamba activate main
+pip install -e .
+```
+
+**Milestone Commit:** "feat: add setup.py for v2.1 installation"
+
+## Phase 2: Core Environment Testing
+
+### 2.1 Fix and verify core environment
+
+- Test basic environment initialization (no GUI)
+- Verify observation/action spaces match expected dims (11, 3)
+- Fix any import or initialization errors
+- Compare against legacy `_legacy/envs/mujoco_fsm_env.py`
+
+**Test:** Run `pytest tests/test_env.py -v`
+
+### 2.2 Fix GUI rendering (Problem #7)
+
+- Investigate `use_gui=True` not opening window
+- Check GLFW initialization in `passive_walker/core/env.py`
+- Test with simple FSM rollout: `walker-demo --seconds 5`
+- Ensure camera tracking and rendering work
+
+**Validation:** Visual confirmation that GUI displays walker
+
+**Files to check:** `passive_walker/core/env.py` (lines 100+, rendering code)
+
+### 2.3 Document core module
+
+Create `passive_walker/core/README.md` documenting:
+
+- Environment modes (fsm, research, hybrid_hip)
+- Key parameters (CTRL_HZ, physics settings)
+- Observation/action spaces
+- Usage examples
+
+**Milestone Commit:** "fix: core environment and GUI rendering - closes #7"
+
+## Phase 3: FSM Controller Testing
+
+### 3.1 Test FSM state transitions (Problem #2)
+
+- Run FSM data collection: `walker-collect-fsm --episodes 5 --duration 5.0 --out test_results/fsm_basic`
+- Analyze state transitions in saved data (`info_fsm_hip`, `info_fsm_k1`, `info_fsm_k2`)
+- Check for "stuck states" - same state for multiple consecutive steps
+- Compare FSM logic against working legacy version in `_legacy/controllers/fsm/`
+
+**Validation script:**
+
+```python
+# Check FSM state diversity
+data = np.load("test_results/fsm_basic/episode_000000.npz")
+hip_changes = np.diff(data['info_fsm_hip']).sum()
+print(f"Hip state changes: {hip_changes} (should be ~10-20 for 5s)")
+```
+
+**Files to fix:** `passive_walker/core/controller.py` (FSMStateMachine class)
+
+### 3.2 Verify FSM outputs (Problem #3)
+
+- Check if hip swings are reasonable (not instant -0.5 to +0.5 jumps)
+- Verify knee targets (should transition smoothly)
+- Inspect `info_qdes` trajectories for discontinuities
+- Add/verify slew rate limiting if needed
+
+**Validation:** Plot qdes trajectories, ensure smoothness
+
+### 3.3 Visual FSM testing
+
+- Run with GUI: `walker-collect-fsm --episodes 3 --duration 10.0 --out test_results/fsm_visual`
+- Observe walking gait visually
+- Verify walker achieves ~8-10 gait cycles in 10s (as designed)
+- Check for falling, tumbling, or unnatural movements
+
+**Expected:** Stable walking with periodic gait
+
+### 3.4 Run FSM test suite
+
+```bash
+pytest tests/test_fsm_collect.py tests/test_fsm_smoke.py -v
+```
+
+Fix any failures from API changes (`--steps` → `--duration`)
+
+### 3.5 Document FSM module
+
+Create `passive_walker/fsm/README.md` documenting:
+
+- FSM state machine logic (hip/knee states)
+- Collection parameters and presets
+- Data schema and output format
+- Quality metrics interpretation
+
+**Milestone Commit:** "fix: FSM state machine transitions and outputs - closes #2, #3"
+
+## Phase 4: BC Data Collection
+
+### 4.1 Collect quality FSM training data
+
+Fix insufficient data quality issues (Problem #6):
+
+- Collect with longer duration: `--duration 25.0` (target: 10+ gait cycles)
+- Use nominal physics initially for stability
+- Collect 200 episodes minimum
+- Monitor fall rate (should be <10%)
+
+**Command:**
+
+```bash
+walker-collect-fsm --episodes 200 --duration 25.0 --physics nominal --out data/fsm_runs_v2.1
+```
+
+**Validation:** Check `README.json` in output - verify low fall rate, high gait cycle count
+
+### 4.2 Verify data schema
+
+Run `pytest tests/test_fsm_collect_schema.py -v` to ensure collected data matches expected format.
+
+**Milestone Commit:** "feat: collect high-quality FSM training data for BC"
+
+## Phase 5: BC Training
+
+### 5.1 Fix training hyperparameters (Problem #4, #5)
+
+Edit `passive_walker/bc/pipeline_config.yaml`:
+
+- Increase epochs: 30 → 100 (better convergence)
+- Reduce early stopping patience: 5 → 10
+- Try learning_rate: 0.001 → 0.0005 (more stable)
+- Start with `section: "hip"` (simplest task)
+
+### 5.2 Train hip-only BC model
+
+```bash
+walker-train-bc --data data/fsm_runs_v2.1 --section hip --epochs 100 --batch 512 --lr 0.0005 --save-dir checkpoints/bc_hip_v2.1
+```
+
+Monitor training curves for convergence.
+
+### 5.3 Fix action denormalization bug (Problem #10)
+
+Review `passive_walker/bc/play.py`:
+
+- Line 19-21: `_norm_to_action()` function
+- Lines 61-64: Action assembly for "both" section
+- Ensure BC outputs are treated as normalized [-1,1], not physical ranges
+- Compare against legacy BC implementation if needed
+
+**Files:** `passive_walker/bc/play.py` (lines 19-64)
+
+**Milestone Commit:** "fix: BC training hyperparameters and action denormalization - closes #4, #5, #10"
+
+## Phase 6: BC Evaluation
+
+### 6.1 Test BC model performance (Problem #1)
+
+Evaluate trained model with visual inspection:
+
+```bash
+# Terminal evaluation (no GUI, fast)
+python -m passive_walker.bc.play --ckpt checkpoints/bc_hip_v2.1/checkpoint.pt --meta checkpoints/bc_hip_v2.1/meta.json --episodes 10 --seconds 25.0 --headless
+
+# Visual evaluation (GUI)
+python -m passive_walker.bc.play --ckpt checkpoints/bc_hip_v2.1/checkpoint.pt --meta checkpoints/bc_hip_v2.1/meta.json --episodes 3 --seconds 25.0
+```
+
+**Success criteria (CRITICAL):**
+
+- Walker survives >20 seconds (user requirement)
+- Achieves forward progress
+- Success rate >50% (at least half episodes complete)
+
+### 6.2 Compare against legacy BC (Problem #8)
+
+- Load legacy BC model from `_legacy/bc/` if available
+- Compare success rates and walking quality
+- Document performance delta in README
+
+### 6.3 Iterative improvement if failing
+
+If BC models still fail (<5s survival):
+
+1. Check FSM data quality again (gait cycles, fall rate)
+2. Try different sections: hip → knees → both
+3. Increase frame_stack: 1 → 3 (temporal context)
+4. Try advanced loss: `section: "both-adv"`
+5. Collect more diverse data with physics sweep
+
+### 6.4 Document BC module
+
+Create `passive_walker/bc/README.md` documenting:
+
+- Training pipeline and config options
+- Model architectures (TorchMLP vs TorchMLPLarge)
+- Action spaces and denormalization
+- Evaluation metrics and baselines
+- Known issues and solutions
+
+**Milestone Commit:** "feat: working BC hip controller - closes #1"
+
+## Phase 7: Integration Testing
+
+### 7.1 Run full test suite
+
+```bash
+pytest tests/ -v -m "not slow"  # Fast tests
+pytest tests/ -v  # All tests including slow ones
+```
+
+Fix any remaining failures.
+
+### 7.2 Update test suite (Problem #11)
+
+Fix API changes in tests:
+
+- Change `--steps` to `--duration` in test commands
+- Update any hardcoded expectations
+
+**Files:** `tests/test_fsm_collect.py`, any others using old CLI
+
+### 7.3 Smoke tests
+
+Run end-to-end validation:
+
+```bash
+# FSM smoke test
+walker-collect-fsm --episodes 1 --duration 5.0 --out test_results/smoke_fsm
+
+# BC smoke test (if model trained)
+python -m passive_walker.bc.play --ckpt checkpoints/bc_hip_v2.1/checkpoint.pt --meta checkpoints/bc_hip_v2.1/meta.json --episodes 1 --seconds 10.0 --headless
+```
+
+**Milestone Commit:** "test: fix test suite for v2.1 API - closes #11"
+
+## Phase 8: Final Documentation
+
+### 8.1 Create root CHANGELOG.md
+
+Document all changes from v2.0 to v2.1:
+
+- Fixed issues (#1-#11)
+- New features
+- Breaking changes
+- Migration guide from legacy
+
+### 8.2 Update component READMEs
+
+Ensure all module READMEs are complete:
+
+- `passive_walker/core/README.md`
+- `passive_walker/fsm/README.md`
+- `passive_walker/bc/README.md`
+
+### 8.3 Create quick start guide
+
+Add examples to each README:
+
+- Minimal working examples
+- Common use cases
+- Troubleshooting tips
+
+**Milestone Commit:** "docs: complete v2.1 documentation"
+
+## Final Validation
+
+- All tests passing: `pytest tests/ -v`
+- FSM walking smoothly with GUI
+- BC model achieving >50% success rate
+- Documentation complete for all modified components
+- Clean git history with meaningful commits
+
+## Rollback Strategy
+
+If critical issues found:
+
+- Git tag current state: `git tag v2.1-broken`
+- Revert to v2.0: `git reset --hard v2.0`
+- Cherry-pick working fixes
+- Retag as v2.1.1
+
+## Notes
+
+- Keep code simple and readable (follow user preference)
+- Test visually at each phase before proceeding
+- Compare against `_legacy/` when in doubt
+- Commit at each milestone for clean history
+- Phase completion requires user approval before continuing
+
+### To-dos
+
+- [x] Create setup.py and install package with pip install -e .
+- [x] Test and fix core environment initialization and basic functionality
+- [x] Fix GUI rendering issue - walker-demo should open visual window
+- [x] Create passive_walker/core/README.md with usage examples
+- [x] Test and fix FSM state machine transitions (stuck states issue)
+- [x] Verify and smooth FSM output trajectories (extreme values issue)
+- [x] Visual FSM testing with GUI - verify stable walking gait
+- [x] Run and fix FSM test suite (test_fsm_collect.py, test_fsm_smoke.py)
+- [x] Create passive_walker/fsm/README.md documenting FSM logic and data collection
+- [ ] Collect 200 high-quality FSM episodes with 25s duration
+- [ ] Validate collected data schema and quality metrics
+- [ ] Fix BC training hyperparameters and action denormalization bug
+- [ ] Train hip-only BC model with improved settings
+- [ ] Evaluate BC model with visual inspection and success rate metrics
+- [ ] Compare BC performance against legacy implementation
+- [ ] Create passive_walker/bc/README.md documenting training pipeline
+- [ ] Run full test suite and fix any failures
+- [ ] Update tests for API changes (--steps to --duration)
+- [ ] Run end-to-end smoke tests for FSM and BC
+- [ ] Create CHANGELOG.md documenting v2.0 to v2.1 changes
+- [ ] Complete all component READMEs with examples and troubleshooting
+```
+
+This plan shows the original structure and all remaining tasks. Phases 1-3 are complete (marked with [x]), and the next LLM should continue with Phase 4.
