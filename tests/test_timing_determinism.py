@@ -78,14 +78,15 @@ def test_deterministic_collector():
     import hashlib
     
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Collect two episodes with same seed
+        # Collect two episodes with same seed (0.64s at 100Hz = 64 steps)
+        duration_sec = 0.64
         outdir1 = Path(tmpdir) / "collect1"
         outdir2 = Path(tmpdir) / "collect2"
         outdir1.mkdir()
         outdir2.mkdir()
         
-        collect(episodes=1, steps=64, outdir=str(outdir1), seed=123)
-        collect(episodes=1, steps=64, outdir=str(outdir2), seed=123)
+        collect(episodes=1, duration_sec=duration_sec, outdir=str(outdir1), seed=123)
+        collect(episodes=1, duration_sec=duration_sec, outdir=str(outdir2), seed=123)
         
         # Load both NPZ files
         data1 = np.load(outdir1 / "episode_000000.npz")
