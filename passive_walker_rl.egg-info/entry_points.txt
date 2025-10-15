@@ -1,0 +1,5 @@
+[console_scripts]
+walker-collect-fsm = passive_walker.fsm.collect:main
+walker-demo = passive_walker.core.env:main
+walker-train-bc = passive_walker.bc.train:main
+walker-train-ppo = passive_walker.ppo.train:main
