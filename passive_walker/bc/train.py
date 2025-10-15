@@ -1,0 +1,495 @@
+"""
+Behavior Cloning Training Pipeline
+
+Unified training CLI supporting both PyTorch and JAX backends for BC models.
+Supports different control sections (hip, knees, both) and advanced loss functions.
+"""
+
+from __future__ import annotations
+import argparse
+import sys
+import os
+import numpy as np
+from .utils import (
+    set_seed, set_global_seed, pick_device, ensure_dir, save_checkpoint, MetricsWriter, Normalizer,
+    ckpt_name_for, meta_name_for, metrics_name_for, save_metrics_json
+)
+from .dataset import discover_npzs, split_by_episode, load_xy, create_data_loader
+
+
+def compute_advanced_loss(pred, target, w1=1.0, w2=0.0, w3=0.1, w4=0.01):
+    """
+    Advanced loss function combining multiple terms for robust training.
+    
+    Args:
+        pred: Model predictions
+        target: Ground truth targets
+        w1: L1 loss weight
+        w2: MSE loss weight  
+        w3: Smoothness loss weight (penalizes large action changes)
+        w4: Bound penalty weight (penalizes actions outside [-1,1])
+    
+    Returns:
+        Total loss and component breakdown
+    """
+    import torch
+
+    # L1 loss (robust to outliers)
+    l1_loss = torch.mean(torch.abs(pred - target))
+
+    # MSE loss (smooth gradients)
+    mse_loss = torch.mean((pred - target) ** 2)
+
+    # Smoothness loss (penalize large action changes across time)
+    if pred.size(0) > 1:
+        action_diff = pred[1:] - pred[:-1]
+        smoothness_loss = torch.mean(torch.abs(action_diff))
+    else:
+        smoothness_loss = pred.new_tensor(0.0)
+
+    # Bound penalty (keep actions in valid range)
+    bound_penalty = torch.mean(torch.relu(torch.abs(pred) - 1.0))
+
+    total = w1 * l1_loss + w2 * mse_loss + w3 * smoothness_loss + w4 * bound_penalty
+    return total, {
+        "l1": float(l1_loss),
+        "mse": float(mse_loss),
+        "smoothness": float(smoothness_loss),
+        "bound_penalty": float(bound_penalty),
+    }
+
+
+def train_torch(args):
+    """Train PyTorch BC model with early stopping and checkpointing."""
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    from .models.models_torch import TorchMLP, TorchMLPLarge
+
+    # Setup device and data
+    device = pick_device(args.gpu)
+    print(f"[INFO] Using device: {device}")
+
+    # Discover and split data
+    files = discover_npzs(args.data)
+    train_files, val_files = split_by_episode(files, val_ratio=0.1)
+    print(f"[INFO] Found {len(files)} episodes: {len(train_files)} train, {len(val_files)} val")
+
+    # Load training data
+    print("[INFO] Loading training data...")
+    X_train, y_train = load_xy(train_files, args.section, args.label_type, args.frame_stack)
+    print("[INFO] Loading validation data...")
+    X_val, y_val = load_xy(val_files, args.section, args.label_type, args.frame_stack)
+
+    print(f"[INFO] Train: {X_train.shape[0]} samples, Val: {X_val.shape[0]} samples")
+    print(f"[INFO] Input dim: {X_train.shape[1]}, Output dim: {y_train.shape[1]}")
+
+    # Normalize inputs
+    normalizer = Normalizer(
+        mean=np.mean(X_train, axis=0),
+        std=np.std(X_train, axis=0)
+    )
+    X_train_norm = normalizer.encode(X_train)
+    X_val_norm = normalizer.encode(X_val)
+
+    # Create model (use larger architecture for better robustness)
+    input_dim = 11 * args.frame_stack
+    model = TorchMLPLarge(in_dim=input_dim, out_dim=y_train.shape[1], hidden=512, dropout=0.1).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
+
+    # Loss function
+    if args.section == "both-adv":
+        def criterion(pred, target):
+            return compute_advanced_loss(pred, target, args.w1, args.w2, args.w3, args.w4)
+    else:
+        criterion = nn.L1Loss()
+
+    # Training setup
+    metrics_writer = MetricsWriter()
+    best_val_loss = float('inf')
+    patience_counter = 0
+    patience = 5
+
+    # Create save directory
+    ensure_dir(args.save_dir)
+
+    print(f"[INFO] Starting training for {args.epochs} epochs...")
+
+    # Training loop
+    for epoch in range(args.epochs):
+        # Training phase
+        model.train()
+        train_loss = 0.0
+        train_batches = 0
+
+        for X_batch, y_batch in create_data_loader(X_train_norm, y_train, args.batch, True, device):
+            optimizer.zero_grad()
+            preds = model(X_batch)
+
+            if args.section == "both-adv":
+                loss, _ = criterion(preds, y_batch)
+            else:
+                loss = criterion(preds, y_batch)
+
+            loss.backward()
+            optimizer.step()
+            
+            train_loss += loss.item()
+            train_batches += 1
+    
+        avg_train_loss = train_loss / max(1, train_batches)
+
+        # Validation phase
+        model.eval()
+        val_loss = 0.0
+        val_batches = 0
+    
+        with torch.no_grad():
+            for X_batch, y_batch in create_data_loader(X_val_norm, y_val, args.batch, False, device):
+                preds = model(X_batch)
+                if args.section == "both-adv":
+                    loss, _ = criterion(preds, y_batch)
+                else:
+                    loss = criterion(preds, y_batch)
+                val_loss += loss.item()
+                val_batches += 1
+
+        avg_val_loss = val_loss / max(1, val_batches) if val_batches > 0 else float('nan')
+
+        # Log metrics
+        metrics_writer.log_epoch(epoch, avg_train_loss, avg_val_loss)
+        print(f"Epoch {epoch:3d}: train_loss={avg_train_loss:.6f}, val_loss={avg_val_loss:.6f}")
+
+        # Early stopping and checkpointing
+        score = avg_val_loss if not np.isnan(avg_val_loss) else avg_train_loss
+        if score + 1e-8 < best_val_loss:
+            best_val_loss = score
+            patience_counter = 0
+
+            # Save best model
+            meta = {
+                "input_dim": input_dim,
+                "output_dim": y_train.shape[1],
+                "section": args.section,
+                "label_type": args.label_type,
+                "dataset_path": args.data,
+                "seed": args.seed,
+                "epoch": epoch,
+                "steps": X_train.shape[0],
+                "best_val_loss": best_val_loss,
+                "frame_stack": args.frame_stack,
+            }
+            checkpoint_path, meta_path = save_checkpoint(
+                model, normalizer, meta, args.save_dir,
+                args.section, args.seed, epoch, X_train.shape[0]
+            )
+            print(f"[INFO] Saved checkpoint: {checkpoint_path}")
+        else:
+            patience_counter += 1
+
+        if patience_counter >= patience:
+            print(f"[INFO] Early stopping at epoch {epoch} (patience={patience})")
+            break
+
+    # Save final metrics
+    metrics_path = os.path.join(args.save_dir, f"torch_{args.section}_seed{args.seed}_metrics.json")
+    metrics_writer.save(metrics_path)
+    print(f"[INFO] Training completed. Best val loss: {best_val_loss:.6f}")
+    print(f"[INFO] Metrics saved to: {metrics_path}")
+
+
+# JAX Training Functions
+def _choose_device_jax(prefer_gpu: bool) -> None:
+    """JAX device selection (automatic)."""
+    try:
+        import jax
+        gpus = jax.devices("gpu")
+        if prefer_gpu and not gpus:
+            print("[JAX] GPU requested but not found; using CPU.")
+    except Exception:
+        pass
+
+
+def _dataloader_numpy(x: np.ndarray, y: np.ndarray, batch: int, shuffle: bool, rng: np.random.RandomState):
+    """Simple numpy data loader for JAX training."""
+    n = x.shape[0]
+    idx = np.arange(n)
+    if shuffle:
+        rng.shuffle(idx)
+    for i in range(0, n, batch):
+        j = min(i + batch, n)
+        sel = idx[i:j]
+        yield x[sel], y[sel]
+
+
+def _l1(pred, targ):
+    """L1 loss for JAX."""
+    import jax.numpy as jnp
+    return jnp.mean(jnp.abs(pred - targ))
+
+
+def _mse(pred, targ):
+    """MSE loss for JAX."""
+    import jax.numpy as jnp
+    return jnp.mean((pred - targ) ** 2)
+
+
+def _smoothness_term(pred):
+    """Smoothness loss term for JAX."""
+    import jax.numpy as jnp
+    if pred.shape[0] <= 1:
+        return jnp.array(0.0, dtype=pred.dtype)
+    diffs = pred[1:] - pred[:-1]
+    return jnp.mean(jnp.abs(diffs))
+
+
+def _bound_penalty(pred):
+    """Bound penalty term for JAX."""
+    import jax.numpy as jnp
+    over = jnp.maximum(jnp.abs(pred) - 1.0, 0.0)
+    return jnp.mean(over)
+
+
+def train_jax(args):
+    """Train JAX model with Equinox and Optax."""
+    import jax
+    import jax.numpy as jnp
+    import equinox as eqx
+    import optax
+    from .models.models_jax import make_model, save_eqx
+    
+    # Section to output dimension mapping
+    SECTION_TO_OUTDIM = {"hip": 1, "knees": 2, "both": 3, "both-adv": 3}
+    
+    set_global_seed(args.seed)
+    _choose_device_jax(args.gpu)
+    
+    out_dim = SECTION_TO_OUTDIM[args.section]
+    
+    # Discover and split data
+    files = discover_npzs(args.data)
+    train_files, val_files = split_by_episode(files, val_ratio=0.1)
+    print(f"[INFO] Found {len(files)} episodes: {len(train_files)} train, {len(val_files)} val")
+    
+    # Load data
+    print("[INFO] Loading training data...")
+    X_train, y_train = load_xy(train_files, args.section, args.label_type, args.frame_stack)
+    print("[INFO] Loading validation data...")
+    X_val, y_val = load_xy(val_files, args.section, args.label_type, args.frame_stack)
+    
+    print(f"[INFO] Train: {X_train.shape[0]} samples, Val: {X_val.shape[0]} samples")
+    print(f"[INFO] Input dim: {X_train.shape[1]}, Output dim: {y_train.shape[1]}")
+    
+    # Normalize inputs
+    normalizer = Normalizer().fit(X_train)
+    X_train_norm = normalizer.apply(X_train)
+    X_val_norm = normalizer.apply(X_val) if X_val.size > 0 else X_val
+    
+    # Convert to JAX arrays
+    X_train_jax = jnp.asarray(X_train_norm)
+    y_train_jax = jnp.asarray(y_train)
+    X_val_jax = jnp.asarray(X_val_norm) if X_val.size > 0 else X_val
+    y_val_jax = jnp.asarray(y_val) if X_val.size > 0 else y_val
+    
+    # Create model
+    key = jax.random.PRNGKey(args.seed)
+    key, subkey = jax.random.split(key)
+    input_dim = 11 * args.frame_stack
+    model = make_model(in_dim=input_dim, out_dim=out_dim, width=128, depth=2, key=subkey)
+    
+    # Setup optimizer
+    filter_spec = eqx.is_array
+    optimizer = optax.adamw(learning_rate=args.lr, weight_decay=1e-5)
+    opt_state = optimizer.init(eqx.filter(model, filter_spec))
+    
+    # Loss function
+    def loss_fn(model, xb, yb):
+        pred = model(xb)
+        if args.section != "both-adv":
+            return _l1(pred, yb)
+        # Advanced combo: L = w1*L1 + w2*MSE + w3*Smoothness + w4*BoundPenalty
+        w1, w2, w3, w4 = args.w1, args.w2, args.w3, args.w4
+        return (
+            w1 * _l1(pred, yb) +
+            w2 * _mse(pred, yb) +
+            w3 * _smoothness_term(pred) +
+            w4 * _bound_penalty(pred)
+        )
+    
+    # JITed step
+    @eqx.filter_jit
+    def step(model, opt_state, xb, yb):
+        loss, grads = eqx.filter_value_and_grad(loss_fn)(model, xb, yb)
+        updates, opt_state = optimizer.update(grads, opt_state, eqx.filter(model, filter_spec))
+        model = eqx.apply_updates(model, updates)
+        return model, opt_state, loss
+    
+    @eqx.filter_jit
+    def eval_loss(model, xb, yb):
+        return loss_fn(model, xb, yb)
+    
+    # Training loop
+    rng = np.random.RandomState(args.seed)
+    best_val_loss = float('inf')
+    best_ckpt = None
+    patience_counter = 0
+    patience = 5
+    hist_train, hist_val = [], []
+    
+    # Create save directory
+    ensure_dir(args.save_dir)
+    
+    print(f"[INFO] Starting JAX training for {args.epochs} epochs...")
+    
+    for epoch in range(args.epochs):
+        # Training
+        model_loss = 0.0
+        batches = 0
+        shuffle = args.section != "both-adv"  # Keep order for smoothness term
+        
+        for xb_np, yb_np in _dataloader_numpy(
+            np.asarray(X_train_jax), np.asarray(y_train_jax), 
+            batch=args.batch, shuffle=shuffle, rng=rng
+        ):
+            xb = jnp.asarray(xb_np)
+            yb = jnp.asarray(yb_np)
+            model, opt_state, train_loss = step(model, opt_state, xb, yb)
+            model_loss += float(train_loss)
+            batches += 1
+        
+        avg_train_loss = model_loss / max(1, batches)
+        hist_train.append(avg_train_loss)
+        
+        # Validation
+        if X_val.size > 0:
+            val_loss = float(eval_loss(model, X_val_jax, y_val_jax))
+            hist_val.append(val_loss)
+        else:
+            val_loss = float('nan')
+            hist_val.append(val_loss)
+        
+        print(f"Epoch {epoch:3d}: train_loss={avg_train_loss:.6f}, val_loss={val_loss:.6f}")
+        
+        # Early stopping and checkpointing
+        score = val_loss if not np.isnan(val_loss) else avg_train_loss
+        if score + 1e-8 < best_val_loss:
+            best_val_loss = score
+            patience_counter = 0
+            
+            # Save best model
+            meta = {
+                "backend": "jax",
+                "input_dim": X_train.shape[1],
+                "output_dim": out_dim,
+                "section": args.section,
+                "label_type": args.label_type,
+                "dataset_path": args.data,
+                "seed": args.seed,
+                "epoch": epoch,
+                "steps": X_train.shape[0],
+                "best_val_loss": best_val_loss,
+                "normalizer_mean": normalizer.mean.tolist(),
+                "normalizer_std": normalizer.std.tolist()
+            }
+            
+            # Save temporary checkpoint
+            tmp_ckpt = os.path.join(args.save_dir, f"tmp_best_{args.section}.eqx")
+            save_eqx(tmp_ckpt, model)
+            best_ckpt = tmp_ckpt
+        else:
+            patience_counter += 1
+            
+        if patience_counter >= patience:
+            print(f"[INFO] Early stopping at epoch {epoch} (patience={patience})")
+            break
+    
+    # Load best model if early stopping occurred
+    if best_ckpt and os.path.exists(best_ckpt):
+        model = eqx.tree_deserialise_leaves(best_ckpt, model)
+        os.remove(best_ckpt)  # Clean up temp file
+    
+    # Save final artifacts
+    steps = X_train.shape[0]
+    episodes = len(train_files)
+    stem = ckpt_name_for(backend="jax", section=args.section, seed=args.seed, episodes=episodes, steps=steps)
+    ckpt_path = os.path.join(args.save_dir, stem + ".eqx")
+    meta_path = os.path.join(args.save_dir, meta_name_for(backend="jax", section=args.section, seed=args.seed, episodes=episodes, steps=steps))
+    metrics_path = os.path.join(args.save_dir, metrics_name_for(backend="jax", section=args.section, seed=args.seed))
+    
+    # Save model
+    save_eqx(ckpt_path, model)
+    
+    # Save metadata
+    meta_dict = {
+        "backend": "jax",
+        "section": args.section,
+        "seed": args.seed,
+        "episodes": episodes,
+        "steps": steps,
+        "in_dim": int(X_train.shape[1]),
+        "out_dim": out_dim,
+        "hidden": 128,
+        "depth": 2,
+        "lr": args.lr,
+        "weight_decay": 1e-5,
+        "batch": args.batch,
+        "label_type": args.label_type,
+        "adv_w": [args.w1, args.w2, args.w3, args.w4] if args.section == "both-adv" else None,
+        "normalizer": {"mean": normalizer.mean.tolist(), "std": normalizer.std.tolist()},
+        "files_train": train_files,
+        "files_val": val_files,
+    }
+    with open(meta_path, "w") as f:
+        import json
+        json.dump(meta_dict, f, indent=2)
+    
+    # Save metrics
+    save_metrics_json(metrics_path, hist_train, hist_val)
+    
+    print(f"[INFO] JAX training completed. Best val loss: {best_val_loss:.6f}")
+    print(f"[INFO] Model saved to: {ckpt_path}")
+    print(f"[INFO] Metrics saved to: {metrics_path}")
+
+
+def main():
+    """Main CLI entry point for BC training."""
+    p = argparse.ArgumentParser("BC train")
+    p.add_argument("--backend", choices=["torch", "jax"], required=True)
+    p.add_argument("--section", choices=["hip", "knees", "both", "both-adv"], required=True)
+    p.add_argument("--data", required=True, help="folder with episode_*.npz")
+    p.add_argument("--label-type", choices=["act", "qdes"], default="act")
+    p.add_argument("--epochs", type=int, default=20)
+    p.add_argument("--batch", type=int, default=1024)
+    p.add_argument("--lr", type=float, default=1e-3)
+    p.add_argument("--seed", type=int, default=123)
+    p.add_argument("--gpu", action="store_true")
+    p.add_argument("--save-dir", default=os.path.join(os.path.dirname(__file__), "checkpoints"))
+    # Advanced loss weights for 'both-adv'
+    p.add_argument("--w1", type=float, default=1.0)
+    p.add_argument("--w2", type=float, default=0.0)
+    p.add_argument("--w3", type=float, default=0.1)
+    p.add_argument("--w4", type=float, default=0.01)
+    p.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack for temporal context")
+    args = p.parse_args()
+
+    set_seed(args.seed)
+
+    print(f"[OK] Backend={args.backend}  Section={args.section}  Data={args.data}")
+    print(f"[OK] label={args.label_type}  epochs={args.epochs}  batch={args.batch}  lr={args.lr}")
+    if args.section == "both-adv":
+        print(f"[OK] adv loss weights: w1={args.w1} w2={args.w2} w3={args.w3} w4={args.w4}")
+
+    if args.backend == "torch":
+        try:
+            train_torch(args)
+        except ImportError as e:
+            sys.exit(f"PyTorch not available: {e}")
+    else:
+        try:
+            train_jax(args)
+        except ImportError as e:
+            sys.exit(f"JAX/Equinox not available: {e}")
+
+
+if __name__ == "__main__":
+    main()

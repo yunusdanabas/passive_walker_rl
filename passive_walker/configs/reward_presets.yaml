@@ -1,0 +1,49 @@
+minimal:
+  c_fp: 1.0
+  c_up: 0.5
+  upright_pitch_max: 0.25
+  c_ac: 3.0e-4
+  pen_fall: 5.0
+  fall_pitch_max: 1.0
+  fall_z_min: 0.15
+  clip_low: -5.0
+  clip_high: 5.0
+  c_vt: 0.0
+  c_sym: 0.0
+  c_fc: 0.0
+
+default:
+  c_fp: 1.0
+  c_up: 0.5
+  upright_pitch_max: 0.25
+  c_ac: 3.0e-4
+  c_vt: 0.25
+  vx_star: 0.8
+  sigma_v: 0.25
+  c_sym: 0.05
+  sigma_sym: 0.4
+  c_fc: 0.05
+  foot_clear_target: 0.03
+  pen_fall: 5.0
+  fall_pitch_max: 1.0
+  fall_z_min: 0.15
+  clip_low: -5.0
+  clip_high: 5.0
+
+aggressive:
+  c_fp: 2.0
+  c_up: 1.0
+  upright_pitch_max: 0.25
+  c_ac: 1.0e-3
+  c_vt: 0.5
+  vx_star: 0.9
+  sigma_v: 0.20
+  c_sym: 0.1
+  sigma_sym: 0.35
+  c_fc: 0.1
+  foot_clear_target: 0.03
+  pen_fall: 10.0
+  fall_pitch_max: 1.0
+  fall_z_min: 0.15
+  clip_low: -10.0
+  clip_high: 10.0

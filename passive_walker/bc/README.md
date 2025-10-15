@@ -1,176 +1,226 @@
-# Behavior Cloning for Passive Walker
+# Behavior Cloning (BC) Pipeline
 
-This module implements behavior cloning (BC) to train neural network controllers for the passive walker robot. The implementation replaces hand-crafted FSM controllers with small neural MLPs, exploring different variants and approaches.
+Complete BC training and evaluation system for mimicking FSM controller behavior.
+Supports both PyTorch and JAX backends with unified CLI interfaces.
 
-## Overview
+## Features
 
-The behavior cloning pipeline consists of four main steps:
-1. **Collect FSM demo data** - Gather demonstration data from the FSM controller
-2. **Train** a small MLP via behavior cloning
-3. **Visualize** label distribution, loss curves, and predictions
-4. **Run** a short GUI roll-out to inspect the gait
+- **Multi-backend support**: PyTorch and JAX implementations
+- **Flexible control sections**: hip-only, knees-only, or full control
+- **Advanced loss functions**: L1, MSE, smoothness, and bound penalties
+- **Data preprocessing**: Frame stacking, normalization, episode splitting
+- **Model architectures**: Simple and large MLPs with regularization
+- **Evaluation tools**: GUI playback with performance metrics
 
-## Variants
+## Quick Start
 
-The implementation includes several variants:
-
-| Variant | Description | Output Dim | Key Features |
-|---------|-------------|------------|--------------|
-| Hip-only (MSE) | Baseline 1-D MLP for hip control | 1 | Simple MSE loss |
-| Knee-only (MSE) | Two separate 1-D MLPs for knees | 2 | Independent knee control |
-| Hip + Knee (MSE) | Single 3-D MLP for all joints | 3 | Unified control |
-| Alternative Losses | Various loss functions | 3 | MSE, Huber, L1 losses |
-| Combined Loss | Composite loss function | 3 | MSE + L1 + Huber |
-
-## Usage
-
-### Running the Pipeline
-
-The complete behavior cloning pipeline can be run using the command-line interface:
-
+### 🚀 YAML-Based Pipeline (Recommended)
 ```bash
-# Collect demonstration data
-python -m passive_walker.bc.hip_knee_alternatives.collect [options]
+# Use default configuration
+python -m passive_walker.bc.run_pipeline
 
-# Train with different loss functions
-python -m passive_walker.bc.hip_knee_alternatives.train_mse [options]
-python -m passive_walker.bc.hip_knee_alternatives.train_huber [options]
-python -m passive_walker.bc.hip_knee_alternatives.train_l1 [options]
-python -m passive_walker.bc.hip_knee_alternatives.train_combined [options]
+# Use preset configurations
+python -m passive_walker.bc.run_pipeline --preset quick_test
+python -m passive_walker.bc.run_pipeline --preset full_control
+python -m passive_walker.bc.run_pipeline --preset advanced
 
-# Run comparison pipeline
-python -m passive_walker.bc.hip_knee_alternatives.run_comparison_pipeline [options]
+# Use custom configuration file
+python -m passive_walker.bc.run_pipeline --config my_config.yaml
 ```
 
-### Command Line Options
+### 📋 Step-by-Step Manual Process
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--steps N` | Number of demonstration steps | 20,000 |
-| `--hz H` | Simulation frequency in Hz | 200 |
-| `--gpu` | Use GPU if available | False |
-| `--sim-duration S` | Test simulation duration in seconds | 15.0 |
-| `--plot` | Save loss history and plots | False |
+#### 1. Collect FSM Demonstration Data
+```bash
+# Collect FSM walking demonstrations
+python -m passive_walker.fsm.collect --episodes 200 --steps 2000 --out data/fsm_runs
+```
 
-### File Naming Convention
+#### 2. Train BC Model
+```bash
+# Train hip-only model (PyTorch)
+python -m passive_walker.bc.train --backend torch --section hip --data data/fsm_runs --epochs 50
 
-The implementation uses a consistent file naming convention based on the number of steps:
+# Train full control model (JAX)
+python -m passive_walker.bc.train --backend jax --section both --data data/fsm_runs --epochs 30
+```
 
-#### Data Files
-- Demo files: `{module}_demos_{steps}steps.pkl`
+#### 3. Evaluate Model
+```bash
+# Play trained model with GUI
+python -m passive_walker.bc.play --ckpt checkpoints/torch_hip_seed123.pt --meta checkpoints/torch_hip_seed123_meta.json --episodes 5 --gui
 
-#### Results Files
-- Model files: `{module}_{loss_type}_controller_{steps}steps.eqx`
-- Loss history: `training_loss_history_{loss_type}_{steps}steps.pkl`
-- Plot images: `{module}_training_loss_{steps}steps.png`
+# Headless evaluation
+python -m passive_walker.bc.play --ckpt checkpoints/jax_both_seed123.eqx --meta checkpoints/jax_both_seed123_meta.json --episodes 10 --no-gui
+```
 
-## Implementation Details
+## File Structure
 
-### Data Collection
-- Uses the FSM controller to generate demonstration data
-- Collects state observations and corresponding actions
-- Supports configurable number of steps and simulation frequency
-- Saves data with step count in filename to `data/bc/` directory
+### Core Files
+- **`run_pipeline.py`** — **Complete end-to-end pipeline** (data collection + training + evaluation + plotting)
+- **`train.py`** — Unified training CLI with PyTorch and JAX support
+- **`play.py`** — Model evaluation and playback with GUI
+- **`dataset.py`** — Data loading, preprocessing, and validation
+- **`utils.py`** — Utilities for seeding, normalization, checkpointing
 
-### Training
-- Implements behavior cloning using JAX and Equinox
-- Supports various loss functions:
-  - MSE (Mean Squared Error)
-  - Huber (Robust to outliers)
-  - L1 (Absolute Error)
-  - Combined (MSE + L1 + Huber)
-- Uses shared training infrastructure
-- Saves models and training artifacts to `results/bc/` directory
+### Model Files
+- **`models_torch.py`** — PyTorch MLP architectures (simple and large)
+- **`models_jax.py`** — JAX/Equinox MLP architectures
+
+### Advanced Training
+- **`two_stage_train.py`** — Advanced two-stage training pipeline for improved performance
+
+### Configuration
+- **`bc_train.yaml`** — Training configuration presets
+- **`checkpoints/`** — Saved models and metadata
+
+## 🚀 Complete Pipeline
+
+The `run_pipeline.py` script provides a complete end-to-end workflow:
+
+### Pipeline Features
+- **Automatic data collection** if not available
+- **Model training** with configurable parameters
+- **Model evaluation** with performance metrics
+- **Automatic plotting** of training and evaluation results
+- **Summary reports** with all results and configurations
+
+### Pipeline Parameters (Most Important First)
+
+#### 🎯 Control Section (MOST IMPORTANT)
+- `--section hip` — Control only hip joint (FSM controls knees)
+- `--section knees` — Control only knee joints (FSM controls hip)  
+- `--section both` — Control all joints (full BC)
+- `--section both-adv` — Full control with advanced loss function
+
+#### 🔧 Backend & Training
+- `--backend {torch,jax}` — Training backend
+- `--episodes N` — Number of FSM episodes to collect
+- `--epochs N` — Training epochs
+- `--batch N` — Batch size
+- `--lr FLOAT` — Learning rate
+
+#### 📊 Data & Evaluation
+- `--steps N` — Steps per episode
+- `--eval-episodes N` — Evaluation episodes
+- `--eval-seconds FLOAT` — Max seconds per episode
+- `--gui` — Enable GUI for evaluation
+
+#### ⚙️ Advanced Options
+- `--frame-stack N` — Temporal context frames
+- `--w1, --w2, --w3, --w4` — Advanced loss weights
+- `--data-dir PATH` — Data directory
+- `--results-dir PATH` — Results directory
+
+### Pipeline Examples
+```bash
+# Quick hip-only training
+python -m passive_walker.bc.run_pipeline --section hip --episodes 100 --epochs 20 --gui
+
+# Full control with JAX
+python -m passive_walker.bc.run_pipeline --section both --backend jax --episodes 200 --epochs 30
+
+# Advanced training with custom loss
+python -m passive_walker.bc.run_pipeline --section both-adv --episodes 200 --epochs 40 --w1 1.0 --w2 0.1 --w3 0.2 --w4 0.05
+
+# Quick test with minimal data
+python -m passive_walker.bc.run_pipeline --section hip --episodes 20 --steps 500 --epochs 5 --eval-episodes 3
+```
+
+## Training Options
+
+### Control Sections
+- **`hip`** — Control only hip joint (FSM controls knees)
+- **`knees`** — Control only knee joints (FSM controls hip)
+- **`both`** — Control all joints (full BC)
+- **`both-adv`** — Full control with advanced loss function
+
+### Backend Selection
+- **PyTorch** — Fast single-environment training, easy debugging
+- **JAX** — Vectorized operations, JIT compilation, better for research
+
+### Advanced Features
+- **Frame stacking** — Temporal context for better control
+- **Data normalization** — Stable training across different scales
+- **Early stopping** — Prevent overfitting
+- **Checkpointing** — Save best models automatically
+
+## Model Architectures
+
+### Simple MLP (TorchMLP)
+- 2 hidden layers with GELU activation
+- Tanh output for bounded actions
+- Lightweight and fast
+
+### Large MLP (TorchMLPLarge)
+- 3 hidden layers with batch normalization
+- Dropout for regularization
+- Better for complex control policies
+
+## Usage Examples
+
+### Basic Training
+```bash
+# Train hip-only model
+python -m passive_walker.bc.train \
+    --backend torch \
+    --section hip \
+    --data data/fsm_runs \
+    --epochs 50 \
+    --batch 1024 \
+    --lr 1e-3
+
+# Train with advanced loss
+python -m passive_walker.bc.train \
+    --backend torch \
+    --section both-adv \
+    --data data/fsm_runs \
+    --epochs 30 \
+    --w1 1.0 --w2 0.0 --w3 0.1 --w4 0.01
+```
 
 ### Evaluation
-- Visualizes training progress and results
-- Provides GUI-based testing environment
-- Supports comparison between different variants
-- Automatically selects best performing model
+```bash
+# GUI evaluation
+python -m passive_walker.bc.play \
+    --ckpt checkpoints/torch_hip_seed123.pt \
+    --meta checkpoints/torch_hip_seed123_meta.json \
+    --episodes 5 \
+    --seconds 25.0 \
+    --gui
 
-## Development
-
-### Interactive Development
-For interactive development and exploration, use the `BehaviourClonning.ipynb` notebook. The notebook provides:
-- Step-by-step walkthrough of the behavior cloning process
-- Interactive visualizations
-- Detailed explanations of each component
-- Experimentation capabilities
-
-### Best Practices
-- Use consistent file naming conventions
-- Document any new variants or modifications
-- Test changes across different loss functions
-- Validate results with GUI rollouts
-- Update documentation when adding new features
-- Keep demonstration data in `data/bc/` directory
-- Save models and training artifacts in `results/bc/` directory
-
-## Dependencies
-
-- JAX
-- Equinox
-- Optax
-- MuJoCo
-- NumPy
-- Matplotlib (for visualization)
-
-## Notes
-
-- The implementation is designed to be modular and extensible
-- Each variant can be run independently
-- Results and trained models are saved for later use
-- GPU acceleration is supported but optional
-- Consistent file naming based on step count
-- Shared training infrastructure across variants
-- Clear separation between data and results directories 
-
-
-## Directory Structure
-
+# Batch evaluation
+python -m passive_walker.bc.play \
+    --ckpt checkpoints/jax_both_seed123.eqx \
+    --meta checkpoints/jax_both_seed123_meta.json \
+    --episodes 100 \
+    --no-gui
 ```
-bc/
-├── __init__.py               # Module initialization and configuration
-├── BehaviourClonning.ipynb   # Interactive notebook for exploration
-├── utils.py                  # Visualization utilities
-├── hip_mse/                  # Hip-only MSE implementation
-├── knee_mse/                 # Knee-only MSE implementation
-├── hip_knee_mse/            # Combined hip+knee MSE
-└── hip_knee_alternatives/   # Alternative loss functions
 
-data/bc/                      # Data directory for demonstrations
-├── hip_mse/
-│   └── hip_mse_demos_*steps.pkl
-├── knee_mse/
-│   └── knee_mse_demos_*steps.pkl
-├── hip_knee_mse/
-│   └── hip_knee_mse_demos_*steps.pkl
-└── hip_knee_alternatives/
-    └── hip_knee_alternatives_demos_*steps.pkl
+## Troubleshooting
 
-results/bc/                   # Results directory for models and plots
-├── hip_mse/
-│   ├── hip_mse_controller_*steps.eqx
-│   ├── training_loss_history_*steps.pkl
-│   └── loss_histories/
-│       └── hip_mse_training_loss_*steps.png
-├── knee_mse/
-│   ├── knee_mse_controller_*steps.eqx
-│   ├── training_loss_history_*steps.pkl
-│   └── loss_histories/
-│       └── knee_mse_training_loss_*steps.png
-├── hip_knee_mse/
-│   ├── hip_knee_mse_controller_*steps.eqx
-│   ├── training_loss_history_*steps.pkl
-│   └── loss_histories/
-│       └── hip_knee_mse_training_loss_*steps.png
-└── hip_knee_alternatives/
-    ├── hip_knee_mse_controller_*steps.eqx
-    ├── hip_knee_huber_controller_*steps.eqx
-    ├── hip_knee_l1_controller_*steps.eqx
-    ├── hip_knee_combined_controller_*steps.eqx
-    ├── training_loss_history_mse_*steps.pkl
-    ├── training_loss_history_huber_*steps.pkl
-    ├── training_loss_history_l1_*steps.pkl
-    └── training_loss_history_combined_*steps.pkl
+### Common Issues
+1. **Model falls immediately** — Try training with more data or larger model
+2. **Low success rate** — Check data quality and model architecture
+3. **Import errors** — Ensure PyTorch or JAX is installed
+4. **Memory issues** — Reduce batch size or use smaller model
+
+### Performance Tips
+- Use `both` section for full control instead of `hip`-only
+- Increase training data with more FSM episodes
+- Try advanced loss function with `both-adv` section
+- Use larger model architecture for complex policies
+
+## Advanced Usage
+
+### Two-Stage Training
+For improved performance, use the two-stage training pipeline:
+```bash
+python -m passive_walker.bc.two_stage_train \
+    --original-data data/fsm_runs \
+    --hip-model checkpoints/torch_hip_seed123.pt \
+    --hip-meta checkpoints/torch_hip_seed123_meta.json \
+    --output-dir results/two_stage
 ```
+
+This approach can help overcome coordination issues in BC training by gradually building up control complexity.
