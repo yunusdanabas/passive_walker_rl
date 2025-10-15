@@ -108,15 +108,7 @@ def test_condition(condition_name, physics_params, test_duration=15.0, use_gui=F
                 print(f"  ❌ FAILED at step {t} (fell)")
                 print(f"  Reason: pitch={pitch:.3f} rad, torso_z={torso_z:.3f} m")
                 env.close()
-                return False, {
-                    "success": False,
-                    "steps": t,
-                    "gait_cycles": gait_cycles,
-                    "max_distance": max_distance,
-                    "min_torso_z": min_torso_z,
-                    "max_pitch": max_pitch,
-                    "total_reward": total_reward
-                }
+                pytest.fail(f"Condition {condition_name} failed at step {t}: pitch={pitch:.3f} rad, torso_z={torso_z:.3f} m")
         
         # Success!
         avg_reward = total_reward / steps
@@ -128,21 +120,11 @@ def test_condition(condition_name, physics_params, test_duration=15.0, use_gui=F
         # Assert success for pytest
         assert True, f"Condition {condition_name} completed successfully"
         
-        return True, {
-            "success": True,
-            "steps": steps,
-            "gait_cycles": gait_cycles,
-            "max_distance": max_distance,
-            "min_torso_z": min_torso_z,
-            "max_pitch": max_pitch,
-            "total_reward": total_reward,
-            "avg_reward": avg_reward
-        }
+        # Don't return values from pytest test functions
         
     except Exception as e:
         print(f"  ❌ ERROR: {e}")
         pytest.fail(f"Condition {condition_name} failed with error: {e}")
-        return False, {"success": False, "error": str(e)}
 
 def run_test_suite(use_gui=False, test_duration=15.0):
     """Run the complete test suite."""
