@@ -1,19 +1,31 @@
 """
-Small helpers: seeding, device selection, JSON I/O, safe mkdir.
+BC Training Utilities
+
+Helper functions for seeding, device selection, data normalization, 
+checkpointing, and metrics tracking.
 """
+
 from __future__ import annotations
 import os
 import json
 import random
 import numpy as np
+from typing import Dict, List, Optional, Tuple, Union
 
 
 def set_seed(seed: int | None):
-    """Set random seeds for reproducibility."""
+    """
+    Set random seeds for reproducibility across all libraries.
+    
+    Args:
+        seed: Random seed (None for non-deterministic)
+    """
     if seed is None: 
         return
     random.seed(seed)
     np.random.seed(seed)
+    
+    # PyTorch seeding
     try:
         import torch
         torch.manual_seed(seed)
@@ -21,6 +33,8 @@ def set_seed(seed: int | None):
             torch.cuda.manual_seed_all(seed)
     except Exception: 
         pass
+    
+    # JAX seeding
     try:
         import jax
         jax.random.PRNGKey(seed)
@@ -28,9 +42,14 @@ def set_seed(seed: int | None):
         pass
 
 
-def ensure_dir(p: str):
+def set_global_seed(seed: int):
+    """Set global seed for JAX (alias for set_seed)."""
+    set_seed(seed)
+
+
+def ensure_dir(path: str):
     """Create directory if it doesn't exist."""
-    os.makedirs(p, exist_ok=True)
+    os.makedirs(path, exist_ok=True)
 
 
 def save_json(path: str, obj: dict):
@@ -46,22 +65,133 @@ def load_json(path: str) -> dict:
 
 
 def pick_device(use_gpu: bool) -> str:
-    """Select appropriate device (cuda/cpu) based on availability."""
+    """
+    Select appropriate device based on availability and preference.
+    
+    Args:
+        use_gpu: Whether to prefer GPU if available
+        
+    Returns:
+        Device string ("cuda" or "cpu")
+    """
     try:
         import torch
-        return "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
-    except Exception:
-        return "cpu"
-
-
-def set_global_seed(seed: int):
-    """Set global random seeds for all backends."""
-    set_seed(seed)
-    try:
-        import jax
-        jax.random.PRNGKey(seed)
+        if use_gpu and torch.cuda.is_available():
+            return "cuda"
     except Exception:
         pass
+    return "cpu"
+
+
+class Normalizer:
+    """
+    Data normalization utility for BC training.
+    
+    Supports both PyTorch-style (encode/decode) and JAX-style (apply) interfaces.
+    """
+    
+    def __init__(self, mean: Optional[np.ndarray] = None, std: Optional[np.ndarray] = None):
+        """
+        Initialize normalizer.
+        
+        Args:
+            mean: Mean values for normalization
+            std: Standard deviation values for normalization
+        """
+        self.mean = mean
+        self.std = std
+    
+    def fit(self, data: np.ndarray) -> 'Normalizer':
+        """
+        Fit normalizer to data (JAX-style interface).
+        
+        Args:
+            data: Training data to fit on
+            
+        Returns:
+            Self for chaining
+        """
+        self.mean = np.mean(data, axis=0)
+        self.std = np.std(data, axis=0)
+        # Avoid division by zero
+        self.std = np.where(self.std < 1e-8, 1.0, self.std)
+        return self
+    
+    def encode(self, data: np.ndarray) -> np.ndarray:
+        """
+        Normalize data (PyTorch-style interface).
+        
+        Args:
+            data: Data to normalize
+            
+        Returns:
+            Normalized data
+        """
+        if self.mean is None or self.std is None:
+            raise ValueError("Normalizer not fitted. Call fit() first.")
+        return (data - self.mean) / self.std
+    
+    def decode(self, data: np.ndarray) -> np.ndarray:
+        """
+        Denormalize data (PyTorch-style interface).
+        
+        Args:
+            data: Normalized data
+            
+        Returns:
+            Denormalized data
+        """
+        if self.mean is None or self.std is None:
+            raise ValueError("Normalizer not fitted. Call fit() first.")
+        return data * self.std + self.mean
+    
+    def apply(self, data: np.ndarray) -> np.ndarray:
+        """
+        Apply normalization (JAX-style interface, alias for encode).
+        
+        Args:
+            data: Data to normalize
+            
+        Returns:
+            Normalized data
+        """
+        return self.encode(data)
+
+
+class MetricsWriter:
+    """Track and save training metrics."""
+    
+    def __init__(self):
+        self.epochs = []
+        self.train_losses = []
+        self.val_losses = []
+    
+    def log_epoch(self, epoch: int, train_loss: float, val_loss: float):
+        """
+        Log metrics for an epoch.
+        
+        Args:
+            epoch: Epoch number
+            train_loss: Training loss
+            val_loss: Validation loss
+        """
+        self.epochs.append(epoch)
+        self.train_losses.append(train_loss)
+        self.val_losses.append(val_loss)
+    
+    def save(self, path: str):
+        """
+        Save metrics to JSON file.
+        
+        Args:
+            path: Output file path
+        """
+        metrics = {
+            "epochs": self.epochs,
+            "train_losses": self.train_losses,
+            "val_losses": self.val_losses
+        }
+        save_json(path, metrics)
 
 
 def ckpt_name_for(backend: str, section: str, seed: int, episodes: int, steps: int) -> str:
@@ -79,96 +209,107 @@ def metrics_name_for(backend: str, section: str, seed: int) -> str:
     return f"{backend}_{section}_seed{seed}_metrics.json"
 
 
-def save_metrics_json(filepath: str, train_loss: list, val_loss: list):
-    """Save training metrics to JSON."""
-    metrics = {
-        "train_loss": train_loss,
-        "val_loss": val_loss,
-        "epochs": list(range(len(train_loss)))
-    }
-    save_json(filepath, metrics)
-
-
-class Normalizer:
-    """Simple normalizer for input features."""
+def save_checkpoint(model, normalizer: Normalizer, meta: dict, save_dir: str, 
+                   section: str, seed: int, epoch: int, steps: int) -> Tuple[str, str]:
+    """
+    Save PyTorch model checkpoint and metadata.
     
-    def __init__(self, mean=None, std=None, eps=1e-6):
-        self.mean = np.asarray(mean) if mean is not None else None
-        self.std = np.asarray(std) if std is not None else None
-        self.eps = eps
-    
-    def fit(self, x):
-        """Fit normalizer to data."""
-        self.mean = np.mean(x, axis=0)
-        self.std = np.std(x, axis=0)
-        return self
-    
-    def apply(self, x):
-        """Apply normalization."""
-        return self.encode(x)
-    
-    def encode(self, x):
-        """Normalize input features."""
-        return (x - self.mean) / (self.std + self.eps)
-    
-    def decode(self, z):
-        """Denormalize features."""
-        return z * (self.std + self.eps) + self.mean
-
-
-def save_checkpoint(model, normalizer, meta, save_dir, section, seed, epoch, steps):
-    """Save model checkpoint with metadata."""
+    Args:
+        model: PyTorch model to save
+        normalizer: Fitted normalizer
+        meta: Metadata dictionary
+        save_dir: Directory to save to
+        section: Control section
+        seed: Random seed
+        epoch: Epoch number
+        steps: Number of training steps
+        
+    Returns:
+        Tuple of (checkpoint_path, metadata_path)
+    """
     import torch
-    import os
-    from datetime import datetime
     
-    # Create filename
-    filename = f"torch_{section}_seed{seed}_ep{epoch}_steps{steps}.pt"
-    filepath = os.path.join(save_dir, filename)
+    # Generate filenames
+    stem = ckpt_name_for("torch", section, seed, 1, steps)  # episodes=1 for single checkpoint
+    ckpt_path = os.path.join(save_dir, stem + ".pt")
+    meta_path = os.path.join(save_dir, meta_name_for("torch", section, seed, 1, steps))
     
-    # Save model state
-    torch.save(model.state_dict(), filepath)
+    # Save model
+    torch.save(model.state_dict(), ckpt_path)
     
-    # Save metadata
-    meta_file = os.path.join(save_dir, f"torch_{section}_seed{seed}_ep{epoch}_steps{steps}_meta.json")
-    meta["checkpoint_file"] = filename
-    meta["timestamp"] = datetime.now().isoformat()
+    # Add normalizer info to metadata
     meta["normalizer_mean"] = normalizer.mean.tolist()
     meta["normalizer_std"] = normalizer.std.tolist()
-    save_json(meta_file, meta)
     
-    return filepath, meta_file
+    # Save metadata
+    save_json(meta_path, meta)
+    
+    return ckpt_path, meta_path
 
 
-def load_checkpoint(checkpoint_path, model, device="cpu"):
-    """Load model checkpoint."""
+def load_checkpoint(ckpt_path: str, model) -> 'torch.nn.Module':
+    """
+    Load PyTorch model checkpoint.
+    
+    Args:
+        ckpt_path: Path to checkpoint file
+        model: Model to load weights into
+        
+    Returns:
+        Model with loaded weights
+    """
     import torch
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    model.load_state_dict(torch.load(ckpt_path, map_location="cpu"))
     return model
 
 
-class MetricsWriter:
-    """Simple metrics tracking for training."""
+def save_metrics_json(path: str, train_losses: List[float], val_losses: List[float]):
+    """
+    Save training metrics to JSON file.
     
-    def __init__(self):
-        self.metrics = {
-            "train_loss": [],
-            "val_loss": [],
-            "epochs": []
-        }
+    Args:
+        path: Output file path
+        train_losses: List of training losses
+        val_losses: List of validation losses
+    """
+    metrics = {
+        "train_losses": train_losses,
+        "val_losses": val_losses,
+        "epochs": list(range(len(train_losses)))
+    }
+    save_json(path, metrics)
+
+
+def format_time(seconds: float) -> str:
+    """
+    Format time in human-readable format.
     
-    def log_epoch(self, epoch, train_loss, val_loss):
-        """Log metrics for an epoch."""
-        self.metrics["epochs"].append(epoch)
-        self.metrics["train_loss"].append(float(train_loss))
-        self.metrics["val_loss"].append(float(val_loss))
+    Args:
+        seconds: Time in seconds
+        
+    Returns:
+        Formatted time string
+    """
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    elif seconds < 3600:
+        return f"{seconds/60:.1f}m"
+    else:
+        return f"{seconds/3600:.1f}h"
+
+
+def format_size(bytes_size: int) -> str:
+    """
+    Format file size in human-readable format.
     
-    def save(self, filepath):
-        """Save metrics to JSON file."""
-        save_json(filepath, self.metrics)
-    
-    def get_best_epoch(self):
-        """Get epoch with lowest validation loss."""
-        if not self.metrics["val_loss"]:
-            return 0
-        return self.metrics["epochs"][np.argmin(self.metrics["val_loss"])]
+    Args:
+        bytes_size: Size in bytes
+        
+    Returns:
+        Formatted size string
+    """
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if bytes_size < 1024.0:
+            return f"{bytes_size:.1f}{unit}"
+        bytes_size /= 1024.0
+    return f"{bytes_size:.1f}TB"

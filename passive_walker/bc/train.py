@@ -1,5 +1,8 @@
 """
-Unified training CLI with full Torch implementation.
+Behavior Cloning Training Pipeline
+
+Unified training CLI supporting both PyTorch and JAX backends for BC models.
+Supports different control sections (hip, knees, both) and advanced loss functions.
 """
 
 from __future__ import annotations
@@ -15,24 +18,36 @@ from .dataset import discover_npzs, split_by_episode, load_xy, create_data_loade
 
 
 def compute_advanced_loss(pred, target, w1=1.0, w2=0.0, w3=0.1, w4=0.01):
-    """Compute advanced loss for both-adv section."""
+    """
+    Advanced loss function combining multiple terms for robust training.
+    
+    Args:
+        pred: Model predictions
+        target: Ground truth targets
+        w1: L1 loss weight
+        w2: MSE loss weight  
+        w3: Smoothness loss weight (penalizes large action changes)
+        w4: Bound penalty weight (penalizes actions outside [-1,1])
+    
+    Returns:
+        Total loss and component breakdown
+    """
     import torch
 
-    # L1 loss
+    # L1 loss (robust to outliers)
     l1_loss = torch.mean(torch.abs(pred - target))
 
-    # MSE loss
+    # MSE loss (smooth gradients)
     mse_loss = torch.mean((pred - target) ** 2)
 
-    # Smoothness loss (penalize large action changes across batch dimension;
-    # OK if your loader yields contiguous time windows)
+    # Smoothness loss (penalize large action changes across time)
     if pred.size(0) > 1:
-        action_diff = pred[1:] - pred[:-1]           # shape: (B-1, D)
+        action_diff = pred[1:] - pred[:-1]
         smoothness_loss = torch.mean(torch.abs(action_diff))
     else:
         smoothness_loss = pred.new_tensor(0.0)
 
-    # Bound penalty (penalize actions outside [-1, 1])
+    # Bound penalty (keep actions in valid range)
     bound_penalty = torch.mean(torch.relu(torch.abs(pred) - 1.0))
 
     total = w1 * l1_loss + w2 * mse_loss + w3 * smoothness_loss + w4 * bound_penalty
@@ -45,13 +60,13 @@ def compute_advanced_loss(pred, target, w1=1.0, w2=0.0, w3=0.1, w4=0.01):
 
 
 def train_torch(args):
-    """Train Torch model."""
+    """Train PyTorch BC model with early stopping and checkpointing."""
     import torch
     import torch.nn as nn
     import torch.optim as optim
-    from .models_torch import TorchMLP, TorchMLPLarge
+    from .models.models_torch import TorchMLP, TorchMLPLarge
 
-    # Setup device
+    # Setup device and data
     device = pick_device(args.gpu)
     print(f"[INFO] Using device: {device}")
 
@@ -60,11 +75,11 @@ def train_torch(args):
     train_files, val_files = split_by_episode(files, val_ratio=0.1)
     print(f"[INFO] Found {len(files)} episodes: {len(train_files)} train, {len(val_files)} val")
 
-    # Load data
+    # Load training data
     print("[INFO] Loading training data...")
-    X_train, y_train = load_xy(train_files, args.section, args.label_type)
+    X_train, y_train = load_xy(train_files, args.section, args.label_type, args.frame_stack)
     print("[INFO] Loading validation data...")
-    X_val, y_val = load_xy(val_files, args.section, args.label_type)
+    X_val, y_val = load_xy(val_files, args.section, args.label_type, args.frame_stack)
 
     print(f"[INFO] Train: {X_train.shape[0]} samples, Val: {X_val.shape[0]} samples")
     print(f"[INFO] Input dim: {X_train.shape[1]}, Output dim: {y_train.shape[1]}")
@@ -78,7 +93,8 @@ def train_torch(args):
     X_val_norm = normalizer.encode(X_val)
 
     # Create model (use larger architecture for better robustness)
-    model = TorchMLPLarge(in_dim=11, out_dim=y_train.shape[1], hidden=512, dropout=0.1).to(device)
+    input_dim = 11 * args.frame_stack
+    model = TorchMLPLarge(in_dim=input_dim, out_dim=y_train.shape[1], hidden=512, dropout=0.1).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
 
     # Loss function
@@ -99,8 +115,9 @@ def train_torch(args):
 
     print(f"[INFO] Starting training for {args.epochs} epochs...")
 
+    # Training loop
     for epoch in range(args.epochs):
-        # ----------------- Train -----------------
+        # Training phase
         model.train()
         train_loss = 0.0
         train_batches = 0
@@ -122,7 +139,7 @@ def train_torch(args):
     
         avg_train_loss = train_loss / max(1, train_batches)
 
-        # ----------------- Validate -----------------
+        # Validation phase
         model.eval()
         val_loss = 0.0
         val_batches = 0
@@ -143,7 +160,7 @@ def train_torch(args):
         metrics_writer.log_epoch(epoch, avg_train_loss, avg_val_loss)
         print(f"Epoch {epoch:3d}: train_loss={avg_train_loss:.6f}, val_loss={avg_val_loss:.6f}")
 
-        # Early stopping + checkpointing
+        # Early stopping and checkpointing
         score = avg_val_loss if not np.isnan(avg_val_loss) else avg_train_loss
         if score + 1e-8 < best_val_loss:
             best_val_loss = score
@@ -151,7 +168,7 @@ def train_torch(args):
 
             # Save best model
             meta = {
-                "input_dim": 11,
+                "input_dim": input_dim,
                 "output_dim": y_train.shape[1],
                 "section": args.section,
                 "label_type": args.label_type,
@@ -160,6 +177,7 @@ def train_torch(args):
                 "epoch": epoch,
                 "steps": X_train.shape[0],
                 "best_val_loss": best_val_loss,
+                "frame_stack": args.frame_stack,
             }
             checkpoint_path, meta_path = save_checkpoint(
                 model, normalizer, meta, args.save_dir,
@@ -193,7 +211,7 @@ def _choose_device_jax(prefer_gpu: bool) -> None:
 
 
 def _dataloader_numpy(x: np.ndarray, y: np.ndarray, batch: int, shuffle: bool, rng: np.random.RandomState):
-    """Simple numpy data loader."""
+    """Simple numpy data loader for JAX training."""
     n = x.shape[0]
     idx = np.arange(n)
     if shuffle:
@@ -205,19 +223,19 @@ def _dataloader_numpy(x: np.ndarray, y: np.ndarray, batch: int, shuffle: bool, r
 
 
 def _l1(pred, targ):
-    """L1 loss."""
+    """L1 loss for JAX."""
     import jax.numpy as jnp
     return jnp.mean(jnp.abs(pred - targ))
 
 
 def _mse(pred, targ):
-    """MSE loss."""
+    """MSE loss for JAX."""
     import jax.numpy as jnp
     return jnp.mean((pred - targ) ** 2)
 
 
 def _smoothness_term(pred):
-    """Smoothness loss term."""
+    """Smoothness loss term for JAX."""
     import jax.numpy as jnp
     if pred.shape[0] <= 1:
         return jnp.array(0.0, dtype=pred.dtype)
@@ -226,7 +244,7 @@ def _smoothness_term(pred):
 
 
 def _bound_penalty(pred):
-    """Bound penalty term."""
+    """Bound penalty term for JAX."""
     import jax.numpy as jnp
     over = jnp.maximum(jnp.abs(pred) - 1.0, 0.0)
     return jnp.mean(over)
@@ -238,7 +256,7 @@ def train_jax(args):
     import jax.numpy as jnp
     import equinox as eqx
     import optax
-    from .models_jax import make_model, save_eqx
+    from .models.models_jax import make_model, save_eqx
     
     # Section to output dimension mapping
     SECTION_TO_OUTDIM = {"hip": 1, "knees": 2, "both": 3, "both-adv": 3}
@@ -255,9 +273,9 @@ def train_jax(args):
     
     # Load data
     print("[INFO] Loading training data...")
-    X_train, y_train = load_xy(train_files, args.section, args.label_type)
+    X_train, y_train = load_xy(train_files, args.section, args.label_type, args.frame_stack)
     print("[INFO] Loading validation data...")
-    X_val, y_val = load_xy(val_files, args.section, args.label_type)
+    X_val, y_val = load_xy(val_files, args.section, args.label_type, args.frame_stack)
     
     print(f"[INFO] Train: {X_train.shape[0]} samples, Val: {X_val.shape[0]} samples")
     print(f"[INFO] Input dim: {X_train.shape[1]}, Output dim: {y_train.shape[1]}")
@@ -276,7 +294,8 @@ def train_jax(args):
     # Create model
     key = jax.random.PRNGKey(args.seed)
     key, subkey = jax.random.split(key)
-    model = make_model(in_dim=X_train.shape[1], out_dim=out_dim, width=128, depth=2, key=subkey)
+    input_dim = 11 * args.frame_stack
+    model = make_model(in_dim=input_dim, out_dim=out_dim, width=128, depth=2, key=subkey)
     
     # Setup optimizer
     filter_spec = eqx.is_array
@@ -433,6 +452,7 @@ def train_jax(args):
 
 
 def main():
+    """Main CLI entry point for BC training."""
     p = argparse.ArgumentParser("BC train")
     p.add_argument("--backend", choices=["torch", "jax"], required=True)
     p.add_argument("--section", choices=["hip", "knees", "both", "both-adv"], required=True)
@@ -444,11 +464,12 @@ def main():
     p.add_argument("--seed", type=int, default=123)
     p.add_argument("--gpu", action="store_true")
     p.add_argument("--save-dir", default=os.path.join(os.path.dirname(__file__), "checkpoints"))
-    # advanced loss weights for 'both-adv'
+    # Advanced loss weights for 'both-adv'
     p.add_argument("--w1", type=float, default=1.0)
     p.add_argument("--w2", type=float, default=0.0)
     p.add_argument("--w3", type=float, default=0.1)
     p.add_argument("--w4", type=float, default=0.01)
+    p.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack for temporal context")
     args = p.parse_args()
 
     set_seed(args.seed)

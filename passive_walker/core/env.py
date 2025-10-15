@@ -15,8 +15,8 @@ from typing import Optional
 # Configuration
 # =====================
 # Simulation parameters
-CTRL_HZ = 50.0          # Controller frequency (Hz)
-SIM_SECONDS = 20.0      # Default episode length (s)
+CTRL_HZ = 100.0          # Controller frequency (Hz)
+SIM_SECONDS = 25.0      # Default episode length (s)
 XML_PATH = "passive_walker/assets/passiveWalker_model.xml"
 
 # Physics parameters
@@ -50,18 +50,25 @@ class PassiveWalkerEnv(gym.Env):
     
     Modes:
         - 'fsm': Uses built-in FSM for stable walking (actions ignored)
-        - 'research': Uses neural network actions for learning
+        - 'research': Uses neural network actions for all joints
+        - 'hybrid_hip': Uses neural network for hip, FSM for knees
     """
 
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self, mode: str = "fsm", use_gui: bool = False, use_jax_pd: bool = False):
+    def __init__(self, mode: str = "fsm", use_gui: bool = False, use_jax_pd: bool = False,
+                 ramp_deg: float = None, friction: float = None, randomize_physics: bool = None):
         super().__init__()
-        assert mode in ("fsm", "research")
+        assert mode in ("fsm", "research", "hybrid_hip")
         self.mode = mode
         self.use_gui = use_gui
         self.ctrl_hz = float(CTRL_HZ)
         self.simend = float(SIM_SECONDS)
+        
+        # Physics parameters (use provided values or defaults)
+        self.ramp_deg = float(ramp_deg if ramp_deg is not None else RAMP_DEG)
+        self.friction = float(friction if friction is not None else FRICTION)
+        self.randomize_physics = bool(randomize_physics if randomize_physics is not None else RANDOMIZE_PHYSICS)
 
         self.window = None
         self._np_rng = None  # Random number generator
@@ -96,6 +103,7 @@ class PassiveWalkerEnv(gym.Env):
         self._qd = np.empty(3, dtype=np.float32)
         self._qdes = np.zeros(3, dtype=np.float32)
         self._u = np.empty(3, dtype=np.float32)
+        
 
         self.prev_x = 0.0
         self._t_next = 0.0  # Target time for next control step
@@ -118,8 +126,10 @@ class PassiveWalkerEnv(gym.Env):
         # Joint IDs and DOF addresses
         self.j_slide_x = jid("slide_x")
         self.dof_x = self.model.jnt_dofadr[self.j_slide_x]
+        self.qpos_x = self.model.jnt_qposadr[self.j_slide_x]
         self.j_slide_z = jid("slide_z")
         self.dof_z = self.model.jnt_dofadr[self.j_slide_z]
+        self.qpos_z = self.model.jnt_qposadr[self.j_slide_z]
         self.j_pitch = jid("pitch")
         self.qpos_pitch = self.model.jnt_qposadr[self.j_pitch]
         self.qvel_pitch = self.model.jnt_dofadr[self.j_pitch]
@@ -153,9 +163,9 @@ class PassiveWalkerEnv(gym.Env):
 
     def _apply_base_physics(self):
         """Set up base physics parameters (gravity, friction)."""
-        tilt = np.deg2rad(RAMP_DEG)
+        tilt = np.deg2rad(self.ramp_deg)
         self.model.opt.gravity[:] = [9.81 * np.sin(tilt), 0.0, -9.81 * np.cos(tilt)]
-        self.model.geom_friction[:, 0] = float(FRICTION)
+        self.model.geom_friction[:, 0] = float(self.friction)
 
     def _randomize_physics(self):
         """Apply domain randomization to physics parameters."""
@@ -182,14 +192,14 @@ class PassiveWalkerEnv(gym.Env):
         self.data.ctrl[self.a_hip] = self.data.ctrl[self.a_lk] = self.data.ctrl[self.a_rk] = 0.0
 
         # Apply physics (base or randomized)
-        if RANDOMIZE_PHYSICS:
+        if self.randomize_physics:
             self._randomize_physics()
         else:
             self._apply_base_physics()
 
         mujoco.mj_forward(self.model, self.data)
         self.data.time = 0.0
-        self.prev_x = float(self.data.qpos[self.dof_x])
+        self.prev_x = float(self.data.qpos[self.qpos_x])
         self._t_next = 1.0 / self.ctrl_hz  # First control step target
 
         return self._get_obs(), {}
@@ -198,8 +208,10 @@ class PassiveWalkerEnv(gym.Env):
         """Get current observation vector."""
         qpos, qvel = self.data.qpos, self.data.qvel
         ob = self._obs
-        ob[0] = qpos[self.dof_x]      # x position
-        ob[1] = qpos[self.dof_z]      # z position
+        
+        # Original 11D state
+        ob[0] = qpos[self.qpos_x]     # x position
+        ob[1] = qpos[self.qpos_z]     # z position
         ob[2] = qpos[self.qpos_pitch] # pitch angle
         ob[3] = qvel[self.dof_x]      # x velocity
         ob[4] = qvel[self.dof_z]      # z velocity
@@ -209,6 +221,8 @@ class PassiveWalkerEnv(gym.Env):
         ob[8] = qvel[self.qvel_hip]   # hip angular velocity
         ob[9] = qvel[self.qvel_lk]    # left knee slider velocity (m/s)
         ob[10] = qvel[self.qvel_rk]   # right knee slider velocity (m/s)
+        
+        
         return ob
 
     def step(self, action: np.ndarray):
@@ -227,8 +241,13 @@ class PassiveWalkerEnv(gym.Env):
             self._qdes[0] = self.fsm.desired_hip()
             lk_des, rk_des = self.fsm.desired_knees()
             self._qdes[1], self._qdes[2] = lk_des, rk_des
+        elif self.mode == "hybrid_hip":
+            # Hybrid mode: NN controls hip, FSM controls knees
+            self._qdes[0] = self.pd.denorm(0, float(action[0]))  # NN hip
+            lk_des, rk_des = self.fsm.desired_knees()  # FSM knees
+            self._qdes[1], self._qdes[2] = lk_des, rk_des
         else:
-            # Research mode: use neural network actions
+            # Research mode: use neural network actions for all joints
             self._qdes[0] = self.pd.denorm(0, float(action[0]))
             self._qdes[1] = self.pd.denorm(1, float(action[1]))
             self._qdes[2] = self.pd.denorm(2, float(action[2]))
@@ -261,7 +280,7 @@ class PassiveWalkerEnv(gym.Env):
         self._t_next += 1.0 / self.ctrl_hz
 
         # Compute reward and termination
-        current_x = float(self.data.qpos[self.dof_x])
+        current_x = float(self.data.qpos[self.qpos_x])
         dx = current_x - self.prev_x
         self.prev_x = current_x
 
@@ -347,7 +366,7 @@ def main():
     import numpy as np
 
     parser = argparse.ArgumentParser(description="Passive Walker Environment")
-    parser.add_argument("--mode", type=str, default="fsm", choices=["fsm", "research"],
+    parser.add_argument("--mode", type=str, default="fsm", choices=["fsm", "research", "hybrid_hip"],
                         help="Control mode")
     parser.add_argument("--seconds", type=float, default=SIM_SECONDS,
                         help="Episode length (s)")

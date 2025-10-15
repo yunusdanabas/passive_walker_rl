@@ -15,10 +15,11 @@ def test_collector_roundtrip():
         outdir = Path(tmpdir) / "test_collect"
         outdir.mkdir()
         
-        # Collect 1 episode with 256 steps
+        # Collect 1 episode with 2.5 seconds duration (100Hz = ~250 steps)
+        duration_sec = 2.5
         collect(
             episodes=1,
-            steps=256,
+            duration_sec=duration_sec,
             outdir=str(outdir),
             seed=123
         )
@@ -44,13 +45,17 @@ def test_collector_roundtrip():
         rew = data["rew"]
         done = data["done"]
         
+        # Calculate expected steps from duration (CTRL_HZ = 100.0)
+        expected_steps = int(duration_sec * 100.0)
+        
         # obs should be (T+1, 11) - includes initial state
-        assert obs.shape == (257, 11), f"obs shape incorrect: {obs.shape}"
+        assert obs.shape[0] == expected_steps + 1, f"obs shape incorrect: {obs.shape}"
+        assert obs.shape[1] == 11, f"obs obs_dim incorrect: {obs.shape}"
         
         # act, rew, done should be (T,)
-        assert act.shape == (256, 3), f"act shape incorrect: {act.shape}"
-        assert rew.shape == (256,), f"rew shape incorrect: {rew.shape}"
-        assert done.shape == (256,), f"done shape incorrect: {done.shape}"
+        assert act.shape == (expected_steps, 3), f"act shape incorrect: {act.shape}"
+        assert rew.shape == (expected_steps,), f"rew shape incorrect: {rew.shape}"
+        assert done.shape == (expected_steps,), f"done shape incorrect: {done.shape}"
         
         # Check data types
         assert obs.dtype == np.float32, f"obs dtype incorrect: {obs.dtype}"
@@ -71,5 +76,5 @@ def test_collector_roundtrip():
         for key in info_keys:
             if key in data.files:
                 info_array = data[key]
-                assert info_array.shape == (256,), f"{key} shape incorrect: {info_array.shape}"
+                assert info_array.shape == (expected_steps,), f"{key} shape incorrect: {info_array.shape}"
                 assert np.all(np.isfinite(info_array)), f"{key} contains non-finite values"
