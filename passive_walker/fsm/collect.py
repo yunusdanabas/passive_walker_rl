@@ -1,8 +1,8 @@
 """
-FSM Data Collection - Duration-Based Design
+FSM Data Collection
 
-Collects FSM walking episodes with duration-first design and gait cycle validation.
-Targets 8-10+ gait cycles per episode for robust BC training data.
+Collects FSM walking episodes for BC training.
+Supports both duration-based and continuous collection modes.
 """
 import os
 import json

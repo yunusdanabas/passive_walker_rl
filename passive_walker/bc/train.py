@@ -1,8 +1,8 @@
 """
 Behavior Cloning Training Pipeline
 
-Unified training CLI supporting both PyTorch and JAX backends for BC models.
-Supports different control sections (hip, knees, both) and advanced loss functions.
+Unified training CLI supporting PyTorch and JAX backends.
+Supports different control sections (hip, knees, both).
 """
 
 from __future__ import annotations

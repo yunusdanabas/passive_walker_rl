@@ -1,8 +1,8 @@
 """
 Passive Walker Controller
 
-PD control and FSM logic for bipedal walking. Matches legacy implementation
-with quaternion-based leg angle detection and proper state transitions.
+PD control and FSM logic for bipedal walking.
+Provides both PD control and FSM state machine for stable walking.
 """
 from __future__ import annotations
 import numpy as np
@@ -34,7 +34,7 @@ HIP_SWING_NEG = -0.5       # Hip backward target (rad)
 KNEE_STANCE = 0.0          # Knee stance position (m)
 KNEE_RETRACT = -0.25       # Knee retract position (m)
 
-# Slew rate limiting (disabled - FSM requires instant transitions for balance)
+# Slew rate limiting (disabled - FSM requires instant transitions)
 HIP_SLEW = None            # rad/s - disabled: any smoothing breaks FSM balance
 KNEE_SLEW = None           # m/s - disabled: any smoothing breaks FSM balance
 
