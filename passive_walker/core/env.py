@@ -2,11 +2,7 @@
 Passive Walker Environment
 
 Bipedal walking environment with FSM and neural network control modes.
-Supports both headless and GUI operation with proper physics simulation.
-
-Parameters live at the top of this file; no YAML config needed.
-GUI is on by default; use --no-gui flag when running headless.
-See passive_walker/fsm/README.md for usage examples.
+Supports both headless and GUI operation with physics simulation.
 """
 from __future__ import annotations
 from typing import Optional
@@ -349,9 +345,8 @@ class PassiveWalkerEnv(gym.Env):
         self.scene = mujoco.MjvScene(self.model, maxgeom=10000)
         self.ctx = mujoco.MjrContext(self.model, mujoco.mjtFontScale.mjFONTSCALE_150.value)
         
-        print(f"✅ GUI window created: 1200x900, title='Passive Walker - v2.1'")
-        print(f"💡 Tip: If you don't see the window, try Alt+Tab or check if it's behind other windows")
-        print(f"💡 On Wayland: The window might be created but not visible due to display server limitations")
+        print(f"✅ GUI window created: 1200x900")
+        print(f"💡 Tip: If window not visible, try Alt+Tab")
 
     def render(self, mode: str = "human"):
         """Render the current state."""

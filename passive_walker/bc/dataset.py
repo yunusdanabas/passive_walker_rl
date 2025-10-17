@@ -2,7 +2,7 @@
 BC Dataset Loading and Processing
 
 Handles loading and preprocessing of FSM demonstration data for BC training.
-Supports different control sections and frame stacking for temporal context.
+Supports different control sections and frame stacking.
 """
 
 from __future__ import annotations

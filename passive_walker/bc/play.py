@@ -1,8 +1,8 @@
 """
 BC Model Evaluation and Playback
 
-Unified evaluation CLI supporting both PyTorch and JAX backends for trained BC models.
-Supports different control sections and provides detailed performance metrics.
+Unified evaluation CLI supporting PyTorch and JAX backends.
+Supports different control sections and provides performance metrics.
 """
 
 from __future__ import annotations
