@@ -23,88 +23,48 @@ def _norm_to_action(qdes: float, lo: float, hi: float) -> float:
 
 def _assemble_action_torch(section: str, model_out: np.ndarray, fsm, data, model_mj):
     """
-    Build full 3D action vector for PyTorch models.
+    Build action vector for PyTorch models.
     
-    Combines BC model output with FSM control for unmanaged joints.
+    For hybrid modes, the environment handles FSM control automatically.
+    We just need to provide the NN actions in the correct format.
     """
-    # Import here to avoid circular imports
-    from passive_walker.core.controller import JOINT_MIN, JOINT_MAX
-    import mujoco
-    
-    hip_lo, lk_lo, rk_lo = JOINT_MIN.tolist()
-    hip_hi, lk_hi, rk_hi = JOINT_MAX.tolist()
-
-    # Get body IDs for FSM contact detection
-    b_lfoot = mujoco.mj_name2id(model_mj, mujoco.mjtObj.mjOBJ_BODY, "left_foot")
-    b_rfoot = mujoco.mj_name2id(model_mj, mujoco.mjtObj.mjOBJ_BODY, "right_foot")
-    
-    # Update FSM to get physical desireds for joints we don't control
-    fsm.update(data, model_mj, b_lfoot, b_rfoot)
-    hip_fsm = fsm.desired_hip()
-    lk_fsm, rk_fsm = fsm.desired_knees()
-
     if section == "hip":
-        # BC controls hip, FSM controls knees
-        hip = float(model_out[0])
-        lk = _norm_to_action(lk_fsm, lk_lo, lk_hi)
-        rk = _norm_to_action(rk_fsm, rk_lo, rk_hi)
-        return np.array([hip, lk, rk], dtype=np.float32)
+        # BC controls hip only, environment handles knees via FSM
+        return np.array([float(model_out[0]), 0.0, 0.0], dtype=np.float32)
 
-    if section == "knees":
-        # FSM controls hip, BC controls knees
-        hip = _norm_to_action(hip_fsm, hip_lo, hip_hi)
-        lk, rk = map(float, model_out[:2])
-        return np.array([hip, lk, rk], dtype=np.float32)
+    elif section == "knees":
+        # BC controls knees only, environment handles hip via FSM  
+        return np.array([float(model_out[0]), float(model_out[1]), 0.0], dtype=np.float32)
 
-    # both / both-adv: BC controls all joints
-    # Normalize model output from [-1,1] to physical joint ranges
-    hip = _norm_to_action(float(model_out[0]), hip_lo, hip_hi)
-    lk = _norm_to_action(float(model_out[1]), lk_lo, lk_hi)
-    rk = _norm_to_action(float(model_out[2]), rk_lo, rk_hi)
-    return np.array([hip, lk, rk], dtype=np.float32)
+    elif section in ("both", "both-adv"):
+        # BC controls all joints
+        return np.array([float(model_out[0]), float(model_out[1]), float(model_out[2])], dtype=np.float32)
+    
+    else:
+        raise ValueError(f"Unknown section: {section}")
 
 
 def _assemble_action_jax(section: str, model_out: np.ndarray, fsm, data, model_mj):
     """
-    Build full 3D action vector for JAX models.
+    Build action vector for JAX models.
     
-    Combines BC model output with FSM control for unmanaged joints.
+    For hybrid modes, the environment handles FSM control automatically.
+    We just need to provide the NN actions in the correct format.
     """
-    # Import here to avoid circular imports
-    from passive_walker.core.controller import JOINT_MIN, JOINT_MAX
-    import mujoco
-    
-    hip_lo, lk_lo, rk_lo = JOINT_MIN.tolist()
-    hip_hi, lk_hi, rk_hi = JOINT_MAX.tolist()
-
-    # Get body IDs for FSM contact detection
-    b_lfoot = mujoco.mj_name2id(model_mj, mujoco.mjtObj.mjOBJ_BODY, "left_foot")
-    b_rfoot = mujoco.mj_name2id(model_mj, mujoco.mjtObj.mjOBJ_BODY, "right_foot")
-    
-    # Update FSM to get physical desireds for joints we don't control
-    fsm.update(data, model_mj, b_lfoot, b_rfoot)
-    hip_fsm = fsm.desired_hip()
-    lk_fsm, rk_fsm = fsm.desired_knees()
-
     if section == "hip":
-        # BC controls hip, FSM controls knees
-        hip = float(model_out[0])
-        lk = _norm_to_action(lk_fsm, lk_lo, lk_hi)
-        rk = _norm_to_action(rk_fsm, rk_lo, rk_hi)
-        return np.array([hip, lk, rk], dtype=np.float32)
+        # BC controls hip only, environment handles knees via FSM
+        return np.array([float(model_out[0]), 0.0, 0.0], dtype=np.float32)
 
-    if section == "knees":
-        # FSM controls hip, BC controls knees
-        hip = _norm_to_action(hip_fsm, hip_lo, hip_hi)
-        lk, rk = map(float, model_out[:2])
-        return np.array([hip, lk, rk], dtype=np.float32)
+    elif section == "knees":
+        # BC controls knees only, environment handles hip via FSM  
+        return np.array([float(model_out[0]), float(model_out[1]), 0.0], dtype=np.float32)
 
-    # both / both-adv: BC controls all joints
-    # Normalize model output from [-1,1] to physical joint ranges
-    hip = _norm_to_action(float(model_out[0]), hip_lo, hip_hi)
-    lk = _norm_to_action(float(model_out[1]), lk_lo, lk_hi)
-    rk = _norm_to_action(float(model_out[2]), rk_lo, rk_hi)
-    return np.array([hip, lk, rk], dtype=np.float32)
+    elif section in ("both", "both-adv"):
+        # BC controls all joints
+        return np.array([float(model_out[0]), float(model_out[1]), float(model_out[2])], dtype=np.float32)
+    
+    else:
+        raise ValueError(f"Unknown section: {section}")
 
 
 def play_torch(ckpt_path: str, meta_path: str, episodes: int, seconds: float, seed: int, headless: bool, frame_stack: int = 1):
@@ -145,8 +105,17 @@ def play_torch(ckpt_path: str, meta_path: str, episodes: int, seconds: float, se
         std=np.array(meta["normalizer_std"], dtype=np.float32)
     )
 
-    # Create environment
-    env = PassiveWalkerEnv(mode="research", use_gui=not headless)
+    # Create environment with correct mode based on section
+    if meta["section"] == "hip":
+        mode = "hybrid_hip"  # FSM controls knees
+    elif meta["section"] == "knees":
+        mode = "hybrid_knees"  # FSM controls hip
+    elif meta["section"] in ("both", "both-adv"):
+        mode = "research"  # NN controls all
+    else:
+        raise ValueError(f"Unknown section: {meta['section']}")
+    
+    env = PassiveWalkerEnv(mode=mode, use_gui=not headless)
     fsm = FSMStateMachine()
     
     # Bind FSM indices for performance
@@ -298,8 +267,17 @@ def play_jax(ckpt_path: str, meta_path: str, episodes: int, seconds: float, seed
         std=np.array(meta["normalizer"]["std"], dtype=np.float32)
     )
 
-    # Create environment
-    env = PassiveWalkerEnv(mode="research", use_gui=not headless)
+    # Create environment with correct mode based on section
+    if meta["section"] == "hip":
+        mode = "hybrid_hip"  # FSM controls knees
+    elif meta["section"] == "knees":
+        mode = "hybrid_knees"  # FSM controls hip
+    elif meta["section"] in ("both", "both-adv"):
+        mode = "research"  # NN controls all
+    else:
+        raise ValueError(f"Unknown section: {meta['section']}")
+    
+    env = PassiveWalkerEnv(mode=mode, use_gui=not headless)
     fsm = FSMStateMachine()
     
     # Bind FSM indices for performance
