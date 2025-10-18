@@ -55,7 +55,7 @@ class PassiveWalkerEnv(gym.Env):
     def __init__(self, mode: str = "fsm", use_gui: bool = False, use_jax_pd: bool = False,
                  ramp_deg: float = None, friction: float = None, randomize_physics: bool = None):
         super().__init__()
-        assert mode in ("fsm", "research", "hybrid_hip")
+        assert mode in ("fsm", "research", "hybrid_hip", "hybrid_knees")
         self.mode = mode
         self.use_gui = use_gui
         self.ctrl_hz = float(CTRL_HZ)
@@ -106,8 +106,7 @@ class PassiveWalkerEnv(gym.Env):
         self._seed_used = None  # Track seed for dataset provenance
         self._timing_debug = False  # Enable timing debug logging
 
-        if self.use_gui:
-            self._ensure_window()
+        # GUI window will be created on first render() call (like legacy)
 
     def _init_model_and_ids(self, xml_path: str) -> None:
         """Load MuJoCo model and cache body/joint/actuator IDs."""
@@ -242,6 +241,11 @@ class PassiveWalkerEnv(gym.Env):
             self._qdes[0] = self.pd.denorm(0, float(action[0]))  # NN hip
             lk_des, rk_des = self.fsm.desired_knees()  # FSM knees
             self._qdes[1], self._qdes[2] = lk_des, rk_des
+        elif self.mode == "hybrid_knees":
+            # Hybrid mode: FSM controls hip, NN controls knees
+            self._qdes[0] = self.fsm.desired_hip()  # FSM hip
+            self._qdes[1] = self.pd.denorm(1, float(action[0]))  # NN left knee
+            self._qdes[2] = self.pd.denorm(2, float(action[1]))  # NN right knee
         else:
             # Research mode: use neural network actions for all joints
             self._qdes[0] = self.pd.denorm(0, float(action[0]))
@@ -317,33 +321,26 @@ class PassiveWalkerEnv(gym.Env):
         if self.window is not None:
             return
         
-        # Initialize GLFW
+        # Initialize GLFW (simple approach like legacy code)
         if not glfw.init():
             raise RuntimeError("GLFW initialization failed")
         
-        # Set GLFW hints for better compatibility
-        glfw.window_hint(glfw.VISIBLE, glfw.TRUE)
-        glfw.window_hint(glfw.FOCUSED, glfw.TRUE)
-        glfw.window_hint(glfw.RESIZABLE, glfw.TRUE)
-        
-        # Try to create window
+        # Create window (simple approach without OpenGL hints)
         self.window = glfw.create_window(1200, 900, "Passive Walker - v2.1", None, None)
         if not self.window:
             glfw.terminate()
             raise RuntimeError("Window creation failed - check display server (X11/Wayland)")
         
-        # Make window visible and focused
+        # Make context current
         glfw.make_context_current(self.window)
-        glfw.show_window(self.window)
-        glfw.focus_window(self.window)
         glfw.swap_interval(1)
         
-        # Initialize MuJoCo rendering components
+        # Initialize MuJoCo rendering components (match legacy naming)
         self.cam = mujoco.MjvCamera()
         self.cam.distance = float(CAM_DISTANCE)
         self.opt = mujoco.MjvOption()
         self.scene = mujoco.MjvScene(self.model, maxgeom=10000)
-        self.ctx = mujoco.MjrContext(self.model, mujoco.mjtFontScale.mjFONTSCALE_150.value)
+        self.context = mujoco.MjrContext(self.model, mujoco.mjtFontScale.mjFONTSCALE_150.value)
         
         print(f"✅ GUI window created: 1200x900")
         print(f"💡 Tip: If window not visible, try Alt+Tab")
@@ -363,7 +360,7 @@ class PassiveWalkerEnv(gym.Env):
         self.cam.lookat[0] = self.data.qpos[0]
         mujoco.mjv_updateScene(self.model, self.data, self.opt, None, self.cam,
                                mujoco.mjtCatBit.mjCAT_ALL.value, self.scene)
-        mujoco.mjr_render(viewport, self.scene, self.ctx)
+        mujoco.mjr_render(viewport, self.scene, self.context)
         glfw.swap_buffers(self.window)
         glfw.poll_events()
 
@@ -385,7 +382,7 @@ def main():
     import numpy as np
 
     parser = argparse.ArgumentParser(description="Passive Walker Environment")
-    parser.add_argument("--mode", type=str, default="fsm", choices=["fsm", "research", "hybrid_hip"],
+    parser.add_argument("--mode", type=str, default="fsm", choices=["fsm", "research", "hybrid_hip", "hybrid_knees"],
                         help="Control mode")
     parser.add_argument("--seconds", type=float, default=SIM_SECONDS,
                         help="Episode length (s)")

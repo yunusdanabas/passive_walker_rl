@@ -240,10 +240,18 @@ def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, m
             if env.mode == "fsm":
                 # In FSM mode the env ignores the action; send zeros for clarity/speed
                 action = np.zeros(3, dtype=np.float32)
+            elif env.mode == "hybrid_hip":
+                # Hybrid mode: NN controls hip, FSM controls knees
+                # Send zeros for hip (will be overridden by FSM), FSM handles knees
+                action = np.zeros(3, dtype=np.float32)
+            elif env.mode == "hybrid_knees":
+                # Hybrid mode: FSM controls hip, NN controls knees
+                # Send zeros for knees (will be overridden by FSM), FSM handles hip
+                action = np.zeros(3, dtype=np.float32)
             else:
                 # If you *really* want to run non-FSM collection, you must send normalized [-1,1] actions
                 # (Consider adding PDController.norm() and using that here.)
-                raise RuntimeError("Collector currently supports mode='fsm' only for safe demos.")
+                raise RuntimeError("Collector currently supports mode='fsm', 'hybrid_hip', 'hybrid_knees' only for safe demos.")
             obs, r, done, info = env.step(action)
 
             # Count gait cycles via hip state transitions
@@ -413,7 +421,7 @@ def main():
     parser.add_argument("--duration", type=float, default=DEFAULT_DURATION_SEC,
                         help="Episode duration in seconds")
     parser.add_argument("--mode", type=str, default="fsm",
-                        choices=["fsm", "research", "hybrid_hip"],
+                        choices=["fsm", "research", "hybrid_hip", "hybrid_knees"],
                         help="Control mode")
     parser.add_argument("--preset", type=str, choices=list(DURATION_PRESETS.keys()),
                         help=f"Duration preset: {', '.join(DURATION_PRESETS.keys())}")
