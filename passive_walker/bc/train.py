@@ -85,9 +85,12 @@ def train_torch(args):
     print(f"[INFO] Input dim: {X_train.shape[1]}, Output dim: {y_train.shape[1]}")
 
     # Normalize inputs
+    std_values = np.std(X_train, axis=0)
+    # Avoid division by zero for features with no variance
+    std_values = np.maximum(std_values, 1e-8)
     normalizer = Normalizer(
         mean=np.mean(X_train, axis=0),
-        std=np.std(X_train, axis=0)
+        std=std_values
     )
     X_train_norm = normalizer.encode(X_train)
     X_val_norm = normalizer.encode(X_val)
