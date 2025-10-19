@@ -244,8 +244,8 @@ class PassiveWalkerEnv(gym.Env):
         elif self.mode == "hybrid_knees":
             # Hybrid mode: FSM controls hip, NN controls knees
             self._qdes[0] = self.fsm.desired_hip()  # FSM hip
-            self._qdes[1] = self.pd.denorm(1, float(action[0]))  # NN left knee
-            self._qdes[2] = self.pd.denorm(2, float(action[1]))  # NN right knee
+            self._qdes[1] = self.pd.denorm(1, float(action[1]))  # NN left knee
+            self._qdes[2] = self.pd.denorm(2, float(action[2]))  # NN right knee
         else:
             # Research mode: use neural network actions for all joints
             self._qdes[0] = self.pd.denorm(0, float(action[0]))

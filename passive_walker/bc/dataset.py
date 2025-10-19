@@ -12,6 +12,10 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional
 from .utils import Normalizer
 
+# Joint ranges for normalization (matching controller.py)
+JOINT_MIN = np.array([-0.5, -0.5, -0.5], dtype=np.float32)
+JOINT_MAX = np.array([+0.5, +0.5, +0.5], dtype=np.float32)
+
 # Required keys in NPZ files
 REQUIRED = ["obs", "rew", "done"]
 OPTIONAL = ["act", "label_act", "label_qdes", "info_qdes"]
@@ -128,6 +132,11 @@ def load_xy(files: List[str], section: str, label_type: str = "act", frame_stack
             else:  # qdes
                 if "info_qdes" in data:
                     labels = data["info_qdes"].astype(np.float32)  # (T, 3)
+                    # Normalize qdes to [-1, 1] range for each joint
+                    for i in range(labels.shape[1]):
+                        lo, hi = JOINT_MIN[i], JOINT_MAX[i]
+                        # Normalize: (value - lo) / (hi - lo) * 2 - 1 --> [-1, 1]
+                        labels[:, i] = 2.0 * (labels[:, i] - lo) / (hi - lo) - 1.0
                 else:
                     raise ValueError(f"No 'info_qdes' data in {file_path}")
             

@@ -15,56 +15,92 @@ import numpy as np
 from passive_walker.core.env import PassiveWalkerEnv
 from .utils import set_seed, Normalizer
 
+# Joint ranges for denormalization (matching controller.py and dataset.py)
+JOINT_MIN = np.array([-0.5, -0.5, -0.5], dtype=np.float32)
+JOINT_MAX = np.array([+0.5, +0.5, +0.5], dtype=np.float32)
+
 
 def _norm_to_action(qdes: float, lo: float, hi: float) -> float:
     """Map physical qdes -> normalized [-1,1] action space."""
     return float(2.0 * (qdes - lo) / (hi - lo) - 1.0)
 
 
-def _assemble_action_torch(section: str, model_out: np.ndarray, fsm, data, model_mj):
+def _denorm_qdes(norm_val: float, lo: float, hi: float) -> float:
+    """Map normalized [-1,1] -> physical qdes."""
+    return float(0.5 * (hi - lo) * (norm_val + 1.0) + lo)
+
+
+def _assemble_action_torch(section: str, model_out: np.ndarray, fsm, data, model_mj, label_type: str = "act"):
     """
     Build action vector for PyTorch models.
     
     For hybrid modes, the environment handles FSM control automatically.
     We just need to provide the NN actions in the correct format.
-    """
-    if section == "hip":
-        # BC controls hip only, environment handles knees via FSM
-        return np.array([float(model_out[0]), 0.0, 0.0], dtype=np.float32)
-
-    elif section == "knees":
-        # BC controls knees only, environment handles hip via FSM  
-        return np.array([float(model_out[0]), float(model_out[1]), 0.0], dtype=np.float32)
-
-    elif section in ("both", "both-adv"):
-        # BC controls all joints
-        return np.array([float(model_out[0]), float(model_out[1]), float(model_out[2])], dtype=np.float32)
     
+    Args:
+        section: Control section (hip, knees, both)
+        model_out: Raw model outputs (normalized to [-1,1] if label_type="qdes")
+        label_type: "act" for actions, "qdes" for denormalized joint positions
+    """
+    # Handle different label types
+    if label_type == "qdes":
+        # Model outputs are normalized qdes [-1,1], but environment expects normalized actions [-1,1]
+        # Since the ranges are the same and both use [-1,1], we can directly use model outputs
+        # The environment's PDController.denorm() will handle conversion to physical ranges
+        if section == "hip":
+            return np.array([float(model_out[0]), 0.0, 0.0], dtype=np.float32)
+        elif section == "knees":
+            return np.array([0.0, float(model_out[0]), float(model_out[1])], dtype=np.float32)
+        elif section in ("both", "both-adv"):
+            return np.array([float(model_out[0]), float(model_out[1]), float(model_out[2])], dtype=np.float32)
+        else:
+            raise ValueError(f"Unknown section: {section}")
     else:
-        raise ValueError(f"Unknown section: {section}")
+        # Original behavior for "act" label type
+        if section == "hip":
+            return np.array([float(model_out[0]), 0.0, 0.0], dtype=np.float32)
+        elif section == "knees":
+            return np.array([0.0, float(model_out[0]), float(model_out[1])], dtype=np.float32)
+        elif section in ("both", "both-adv"):
+            return np.array([float(model_out[0]), float(model_out[1]), float(model_out[2])], dtype=np.float32)
+        else:
+            raise ValueError(f"Unknown section: {section}")
 
 
-def _assemble_action_jax(section: str, model_out: np.ndarray, fsm, data, model_mj):
+def _assemble_action_jax(section: str, model_out: np.ndarray, fsm, data, model_mj, label_type: str = "act"):
     """
     Build action vector for JAX models.
     
     For hybrid modes, the environment handles FSM control automatically.
     We just need to provide the NN actions in the correct format.
-    """
-    if section == "hip":
-        # BC controls hip only, environment handles knees via FSM
-        return np.array([float(model_out[0]), 0.0, 0.0], dtype=np.float32)
-
-    elif section == "knees":
-        # BC controls knees only, environment handles hip via FSM  
-        return np.array([float(model_out[0]), float(model_out[1]), 0.0], dtype=np.float32)
-
-    elif section in ("both", "both-adv"):
-        # BC controls all joints
-        return np.array([float(model_out[0]), float(model_out[1]), float(model_out[2])], dtype=np.float32)
     
+    Args:
+        section: Control section (hip, knees, both)
+        model_out: Raw model outputs (normalized to [-1,1] if label_type="qdes")
+        label_type: "act" for actions, "qdes" for denormalized joint positions
+    """
+    # Handle different label types  
+    if label_type == "qdes":
+        # Model outputs are normalized qdes [-1,1], environment expects normalized actions [-1,1]
+        # Since ranges are the same, directly use model outputs
+        if section == "hip":
+            return np.array([float(model_out[0]), 0.0, 0.0], dtype=np.float32)
+        elif section == "knees":
+            return np.array([0.0, float(model_out[0]), float(model_out[1])], dtype=np.float32)
+        elif section in ("both", "both-adv"):
+            return np.array([float(model_out[0]), float(model_out[1]), float(model_out[2])], dtype=np.float32)
+        else:
+            raise ValueError(f"Unknown section: {section}")
     else:
-        raise ValueError(f"Unknown section: {section}")
+        # Original behavior for "act" label type
+        if section == "hip":
+            return np.array([float(model_out[0]), 0.0, 0.0], dtype=np.float32)
+        elif section == "knees":
+            return np.array([0.0, float(model_out[0]), float(model_out[1])], dtype=np.float32)
+        elif section in ("both", "both-adv"):
+            return np.array([float(model_out[0]), float(model_out[1]), float(model_out[2])], dtype=np.float32)
+        else:
+            raise ValueError(f"Unknown section: {section}")
 
 
 def play_torch(ckpt_path: str, meta_path: str, episodes: int, seconds: float, seed: int, headless: bool, frame_stack: int = 1):
@@ -160,25 +196,29 @@ def play_torch(ckpt_path: str, meta_path: str, episodes: int, seconds: float, se
                     
                     if len(play_torch.obs_buffer) < frame_stack:
                         # Not enough frames yet, use FSM only
-                        action = _assemble_action_torch(meta["section"], np.array([0.0]), fsm, env.data, env.model)
+                        action = _assemble_action_torch(meta["section"], np.array([0.0]), fsm, env.data, env.model, meta.get("label_type", "act"))
                     else:
                         # Stack frames
                         x = np.concatenate(play_torch.obs_buffer).astype(np.float32)
                         x = normalizer.apply(x[None, :]).astype(np.float32)
                         with torch.no_grad():
                             model_out = model(torch.tensor(x, dtype=torch.float32))[0].numpy()
-                        action = _assemble_action_torch(meta["section"], model_out, fsm, env.data, env.model)
+                        action = _assemble_action_torch(meta["section"], model_out, fsm, env.data, env.model, meta.get("label_type", "act"))
                 else:
                     # No frame stacking
                     x = normalizer.apply(obs[None, :]).astype(np.float32)
                     with torch.no_grad():
                         model_out = model(torch.tensor(x, dtype=torch.float32))[0].numpy()
-                    action = _assemble_action_torch(meta["section"], model_out, fsm, env.data, env.model)
+                    action = _assemble_action_torch(meta["section"], model_out, fsm, env.data, env.model, meta.get("label_type", "act"))
 
                 # Step environment
                 obs, reward, done, info = env.step(action)
                 episode_reward += reward
                 episode_steps += 1
+                
+                # Render GUI if enabled
+                if not headless:
+                    env.render()
 
                 # Print progress
                 if episode_steps % 50 == 0:
@@ -316,12 +356,16 @@ def play_jax(ckpt_path: str, meta_path: str, episodes: int, seconds: float, seed
                 model_out = np.asarray(model(x_jax))
 
                 # Assemble full action
-                action = _assemble_action_jax(meta["section"], model_out, fsm, env.data, env.model)
+                action = _assemble_action_jax(meta["section"], model_out, fsm, env.data, env.model, meta.get("label_type", "act"))
 
                 # Step environment
                 obs, reward, done, info = env.step(action)
                 episode_reward += reward
                 episode_steps += 1
+                
+                # Render GUI if enabled
+                if not headless:
+                    env.render()
 
                 # Print progress
                 if episode_steps % 50 == 0:
