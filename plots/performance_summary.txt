@@ -1,0 +1,35 @@
+MODEL PERFORMANCE SUMMARY REPORT
+==================================================
+
+Generated: 2025-10-19 00:19:18
+
+HIP MODEL:
+--------------------
+Episodes run: 3
+Success rate: 100.00%
+Average reward: 241.79
+Average episode time: 15.00s
+Average distance: 21.28m
+Average pitch: 0.298rad
+Average steps/episode: 1500
+
+KNEES MODEL:
+--------------------
+Episodes run: 3
+Success rate: 100.00%
+Average reward: 243.87
+Average episode time: 15.00s
+Average distance: 21.83m
+Average pitch: 0.288rad
+Average steps/episode: 1500
+
+BOTH MODEL:
+--------------------
+Episodes run: 3
+Success rate: 100.00%
+Average reward: 306.63
+Average episode time: 15.00s
+Average distance: 21.44m
+Average pitch: 0.294rad
+Average steps/episode: 1500
+
