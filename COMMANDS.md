@@ -191,7 +191,7 @@ python -m passive_walker.bc.play \
 
 ### Quick Test Analysis (5-6 minutes)
 ```bash
-python analysis_code/run_analysis_pipeline.py \
+python -m analysis.run_analysis_pipeline \
     --checkpoint checkpoints_fixed/torch_both_seed123_ep1_steps180000.pt \
     --meta checkpoints_fixed/torch_both_seed123_ep1_steps180000_meta.json \
     --episodes 3
@@ -199,7 +199,7 @@ python analysis_code/run_analysis_pipeline.py \
 
 ### Standard Analysis (15-20 minutes)
 ```bash
-python analysis_code/run_analysis_pipeline.py \
+python -m analysis.run_analysis_pipeline \
     --checkpoint checkpoints_fixed/torch_both_seed123_ep1_steps180000.pt \
     --meta checkpoints_fixed/torch_both_seed123_ep1_steps180000_meta.json \
     --episodes 10
@@ -207,7 +207,7 @@ python analysis_code/run_analysis_pipeline.py \
 
 ### Publication-Quality Analysis (30-35 minutes)
 ```bash
-python analysis_code/run_analysis_pipeline.py \
+python -m analysis.run_analysis_pipeline \
     --checkpoint checkpoints_fixed/torch_both_seed123_ep1_steps180000.pt \
     --meta checkpoints_fixed/torch_both_seed123_ep1_steps180000_meta.json \
     --episodes 20
@@ -215,7 +215,7 @@ python analysis_code/run_analysis_pipeline.py \
 
 ### Behavioral Analysis Only (7-10 minutes)
 ```bash
-python analysis_code/run_analysis_pipeline.py \
+python -m analysis.run_analysis_pipeline \
     --checkpoint checkpoints_fixed/torch_both_seed123_ep1_steps180000.pt \
     --meta checkpoints_fixed/torch_both_seed123_ep1_steps180000_meta.json \
     --episodes 10 \
@@ -224,7 +224,7 @@ python analysis_code/run_analysis_pipeline.py \
 
 ### Robustness Testing Only (10-15 minutes)
 ```bash
-python analysis_code/run_analysis_pipeline.py \
+python -m analysis.run_analysis_pipeline \
     --checkpoint checkpoints_fixed/torch_both_seed123_ep1_steps180000.pt \
     --meta checkpoints_fixed/torch_both_seed123_ep1_steps180000_meta.json \
     --episodes 10 \
@@ -233,11 +233,41 @@ python analysis_code/run_analysis_pipeline.py \
 
 ---
 
+## 🔧 BC Diagnostic Commands
+
+### Analyze Training Data
+```bash
+python -m analysis.bc_data_inspector data/fsm_demos --samples 5
+```
+
+### Analyze Model Outputs
+```bash
+python -m analysis.bc_model_diagnostics \
+    --ckpt checkpoints_fixed/torch_both_seed123_ep1_steps180000.pt \
+    --meta checkpoints_fixed/torch_both_seed123_ep1_steps180000_meta.json \
+    --data data/fsm_demos
+```
+
+### Diagnose Model Actions
+```bash
+python -m analysis.bc_action_diagnostics \
+    --ckpt checkpoints_fixed/torch_both_seed123_ep1_steps180000.pt \
+    --meta checkpoints_fixed/torch_both_seed123_ep1_steps180000_meta.json \
+    --duration 5.0
+```
+
+### Analyze Dataset Quality
+```bash
+python -m analysis.bc_data_analysis data/fsm_training --output analysis_results --save-json
+```
+
+---
+
 ## 🎯 Optimization Commands
 
 ### Quick Optimization Test (2 hours)
 ```bash
-python analysis_code/run_model_optimization.py \
+python -m analysis.run_model_optimization \
     --config passive_walker/bc/pipeline_config.yaml \
     --components all \
     --max-trials 5
@@ -245,7 +275,7 @@ python analysis_code/run_model_optimization.py \
 
 ### Hyperparameter Optimization Only (3-5 hours)
 ```bash
-python analysis_code/run_model_optimization.py \
+python -m analysis.run_model_optimization \
     --config passive_walker/bc/pipeline_config.yaml \
     --components hyperparams \
     --max-trials 15 \
@@ -254,7 +284,7 @@ python analysis_code/run_model_optimization.py \
 
 ### Architecture Search Only (3-4 hours)
 ```bash
-python analysis_code/run_model_optimization.py \
+python -m analysis.run_model_optimization \
     --config passive_walker/bc/pipeline_config.yaml \
     --components architecture \
     --max-trials 12
@@ -262,7 +292,7 @@ python analysis_code/run_model_optimization.py \
 
 ### Full Optimization - Foreground Run (20-35 hours)
 ```bash
-python analysis_code/run_model_optimization.py \
+python -m analysis.run_model_optimization \
     --config passive_walker/bc/pipeline_config.yaml \
     --components all \
     --max-trials 25 \
@@ -271,7 +301,7 @@ python analysis_code/run_model_optimization.py \
 
 ### Full Optimization - Background Overnight Run (20-35 hours)
 ```bash
-nohup python analysis_code/run_model_optimization.py \
+nohup python -m analysis.run_model_optimization \
     --config passive_walker/bc/pipeline_config.yaml \
     --components all \
     --max-trials 25 \
@@ -281,7 +311,7 @@ nohup python analysis_code/run_model_optimization.py \
 
 ### Multi-Objective Optimization Only (2-3 hours)
 ```bash
-python analysis_code/run_model_optimization.py \
+python -m analysis.run_model_optimization \
     --config passive_walker/bc/pipeline_config.yaml \
     --components multiobjective
 ```
@@ -326,7 +356,7 @@ python -m passive_walker.bc.play --ckpt checkpoints_fixed/torch_both_seed123_ep1
 
 **Quick Analysis Test:**
 ```bash
-python analysis_code/run_analysis_pipeline.py \
+python -m analysis.run_analysis_pipeline \
     --checkpoint checkpoints_fixed/torch_both_seed123_ep1_steps180000.pt \
     --meta checkpoints_fixed/torch_both_seed123_ep1_steps180000_meta.json \
     --episodes 3
@@ -334,7 +364,7 @@ python analysis_code/run_analysis_pipeline.py \
 
 **Full Analysis:**
 ```bash
-python analysis_code/run_analysis_pipeline.py \
+python -m analysis.run_analysis_pipeline \
     --checkpoint checkpoints_fixed/torch_both_seed123_ep1_steps180000.pt \
     --meta checkpoints_fixed/torch_both_seed123_ep1_steps180000_meta.json \
     --episodes 10
@@ -342,7 +372,7 @@ python analysis_code/run_analysis_pipeline.py \
 
 **Overnight Optimization:**
 ```bash
-nohup python analysis_code/run_model_optimization.py \
+nohup python -m analysis.run_model_optimization \
     --config passive_walker/bc/pipeline_config.yaml \
     --components all \
     --max-trials 25 \
@@ -477,7 +507,7 @@ python -c "from passive_walker.core.env import PassiveWalkerEnv; print('✅ Envi
 ls -la checkpoints/
 
 # Use available checkpoint
-python analysis_code/run_analysis_pipeline.py \
+python -m analysis.run_analysis_pipeline \
     --checkpoint checkpoints/YOUR_CHECKPOINT_HERE.pt \
     --meta checkpoints/YOUR_META_HERE.json \
     --episodes 3

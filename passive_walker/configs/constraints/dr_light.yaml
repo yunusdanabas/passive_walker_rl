@@ -1,7 +1,0 @@
-physics:
-  randomize_physics: true
-  ramp_deg_min: 8.0
-  ramp_deg_max: 16.0
-  friction: [0.7, 1.1]
-  mass_jitter: 0.08
-

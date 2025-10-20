@@ -337,7 +337,7 @@ def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, m
         if (ep + 1) == EARLY_ABORT_EPISODES and len(episode_fell_flags) >= EARLY_ABORT_EPISODES:
             avg_fall = float(np.mean(episode_fell_flags))
             if avg_fall > EARLY_ABORT_THRESHOLD:
-                print(f"\n🚨 EARLY ABORT: High fall rate detected!")
+                print(f"\nEARLY ABORT: High fall rate detected!")
                 print(f"Fall rate: {avg_fall:.1%} (threshold: {EARLY_ABORT_THRESHOLD:.1%})")
                 print(f"Stopping collection after {ep + 1} episodes to prevent bad dataset.")
                 print("Check physics parameters or FSM configuration.")
@@ -359,11 +359,11 @@ def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, m
         high_pitch = sum(1 for p in episode_pitch_max if p > 1.0)
         
         if short_episodes > 0:
-            print(f"⚠️  {short_episodes} episodes shorter than 80% of target duration")
+            print(f"WARNING: {short_episodes} episodes shorter than 80% of target duration")
         if low_cycles > 0:
-            print(f"⚠️  {low_cycles} episodes with <6 gait cycles")
+            print(f"WARNING: {low_cycles} episodes with <6 gait cycles")
         if high_pitch > 0:
-            print(f"⚠️  {high_pitch} episodes with max pitch >1.0 rad")
+            print(f"WARNING: {high_pitch} episodes with max pitch >1.0 rad")
         
         # Save quality report
         quality_report = _create_quality_report(

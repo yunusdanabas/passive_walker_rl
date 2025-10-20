@@ -214,9 +214,9 @@ except Exception as e:
 # Test 8: Analysis module imports
 print("\n8️⃣  Testing analysis module imports...")
 try:
-    sys.path.insert(0, str(Path.cwd() / "analysis_code"))
-    from behavioral_analysis import run_behavioral_analysis
-    from robustness_testing import run_robustness_testing
+    sys.path.insert(0, str(Path.cwd()))
+    from analysis.behavioral_analysis import run_behavioral_analysis
+    from analysis.robustness_testing import run_robustness_testing
     print("   ✅ Analysis modules imported successfully")
 except Exception as e:
     print(f"   ❌ Analysis module import failed: {e}")
@@ -230,7 +230,7 @@ print("✅ ALL TESTS PASSED!")
 print("=" * 70)
 print("\n🚀 Analysis pipeline is ready to use!")
 print("\nRun:")
-print("  python analysis_code/run_analysis_pipeline.py \\")
+print("  python -m analysis.run_analysis_pipeline \\")
 print("      --checkpoint checkpoints/torch_both_seed123_ep1_steps180000.pt \\")
 print("      --meta checkpoints/torch_both_seed123_ep1_steps180000_meta.json \\")
 print("      --episodes 3")

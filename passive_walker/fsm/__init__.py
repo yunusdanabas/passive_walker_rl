@@ -1,6 +1,5 @@
-"""
-FSM Data Collection Module
+"""FSM data collection module."""
+from .collect import collect, collect_physics_sweep
 
-This module handles collection of expert demonstration data using the FSM controller.
-"""
+__all__ = ["collect", "collect_physics_sweep"]
 
