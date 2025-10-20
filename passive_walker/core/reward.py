@@ -11,20 +11,13 @@ FALL_PITCH_MAX = 1.3    # rad: terminate if |pitch| exceeds this
 FALL_Z_MIN     = 0.70   # m: terminate if torso is too low
 ALIVE_Z_MIN    = 0.90   # m: small alive bonus if above this
 
-# -------------------- Weights (kept tiny, per mode) --------------------
+# -------------------- Weights (same for all modes) --------------------
 # Signals used: dx (forward progress), pitch_abs, u_abs_sum, torso_z
-WEIGHTS_FSM = dict(
+WEIGHTS = dict(
     w_dx=2.0,     # reward for forward progress per step
     w_pitch=0.1,  # penalty for absolute pitch
     w_ctrl=0.0005, # penalty for control effort (sum |u|)
     w_alive=0.20, # alive bonus when torso high enough
-)
-
-WEIGHTS_RESEARCH = dict(
-    w_dx=5.0,
-    w_pitch=0.1,
-    w_ctrl=0.0005,
-    w_alive=0.20,
 )
 
 def _fell(signals: Dict[str, float]) -> bool:
@@ -61,11 +54,8 @@ def _reward(signals: Dict[str, float], w: Dict[str, float]) -> Tuple[float, Dict
     return float(r), info
 
 def compute_reward(signals: Dict[str, float], mode: str = "fsm") -> Tuple[float, Dict[str, float]]:
-    """Main entry: pick weights by mode ('fsm' or 'research')."""
-    if mode == "research":
-        return _reward(signals, WEIGHTS_RESEARCH)
-    # default to FSM weights
-    return _reward(signals, WEIGHTS_FSM)
+    """Main entry: same weights for all modes."""
+    return _reward(signals, WEIGHTS)
 
 def get_reward_fn(mode: str = "fsm"):
     """Env-compatible factory: returns a (signals)->(reward, info) callable."""
