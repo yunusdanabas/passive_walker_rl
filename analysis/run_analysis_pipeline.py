@@ -6,7 +6,7 @@ Runs complete behavioral analysis and robustness testing.
 Generates organized visual outputs in a single folder structure.
 
 Usage:
-    python analysis_code/run_analysis_pipeline.py \\
+    python -m analysis.run_analysis_pipeline \\
         --checkpoint checkpoints/model.pt \\
         --meta checkpoints/model_meta.json \\
         --episodes 10
@@ -22,8 +22,8 @@ from datetime import datetime
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from behavioral_analysis import run_behavioral_analysis
-from robustness_testing import run_robustness_testing
+from .behavioral_analysis import run_behavioral_analysis
+from .robustness_testing import run_robustness_testing
 
 
 def create_output_structure(base_dir: Path):

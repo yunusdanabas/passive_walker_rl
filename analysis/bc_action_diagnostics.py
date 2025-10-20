@@ -19,8 +19,8 @@ def compare_model_vs_fsm(ckpt_path: str, meta_path: str, duration_sec: float = 5
         duration_sec: Duration to run comparison (seconds)
     """
     import torch
-    from .models.models_torch import TorchMLP, TorchMLPLarge
-    from .utils import load_checkpoint, Normalizer
+    from passive_walker.bc.models.models_torch import TorchMLP, TorchMLPLarge
+    from passive_walker.bc.utils import load_checkpoint, Normalizer
     from passive_walker.core.env import PassiveWalkerEnv
     from passive_walker.core.controller import FSMStateMachine
     

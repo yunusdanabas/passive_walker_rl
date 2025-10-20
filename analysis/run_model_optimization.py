@@ -6,7 +6,7 @@ Unified runner for model optimization (hyperparameters, architecture, training s
 Generates organized outputs in results/model_optimization/ with visual summaries.
 
 Usage:
-    python analysis_code/run_model_optimization.py \\
+    python -m analysis.run_model_optimization \\
         --config passive_walker/bc/pipeline_config.yaml \\
         --components hyperparams architecture \\
         --max-trials 25
@@ -24,15 +24,15 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 try:
-    from passive_walker.bc.optimization import (
+    from analysis.optimization import (
         HyperparameterOptimizer,
         ArchitectureOptimizer,
         AdvancedTrainer,
         MultiObjectiveOptimizer
     )
 except ImportError as e:
-    print(f"❌ Import error: {e}")
-    print("Make sure optimization modules exist in passive_walker/bc/optimization/")
+    print(f"Import error: {e}")
+    print("Make sure optimization modules exist in analysis/optimization/")
     sys.exit(1)
 
 

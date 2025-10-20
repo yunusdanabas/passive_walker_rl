@@ -18,10 +18,10 @@ def analyze_model(ckpt_path: str, meta_path: str, data_dir: str = "data/fsm_demo
         data_dir: Path to training data for sample observations
     """
     import torch
-    from .models.models_torch import TorchMLP, TorchMLPLarge
-    from .utils import load_checkpoint, Normalizer
+    from passive_walker.bc.models.models_torch import TorchMLP, TorchMLPLarge
+    from passive_walker.bc.utils import load_checkpoint, Normalizer
     from passive_walker.core.controller import PDController
-    from .dataset import discover_npzs, load_xy
+    from passive_walker.bc.dataset import discover_npzs, load_xy
     
     print(f"🔍 Analyzing model: {ckpt_path}")
     
