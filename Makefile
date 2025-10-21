@@ -1,9 +1,9 @@
 # Makefile (optional)
 .PHONY: fmt lint test smoke demo
 fmt:
-	black passive_walker/ tests/ scripts/
+	black passive_walker/ tests/ tools/ scripts/
 lint:
-	ruff check passive_walker/ tests/ scripts/
+	ruff check passive_walker/ tests/ tools/ scripts/
 test:
 	pytest -q
 smoke:

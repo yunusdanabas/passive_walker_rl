@@ -1,0 +1,31 @@
+{
+  "checkpoint": "experiments/models/torch_both_seed456_ep1_steps9000.pt",
+  "meta": "experiments/models/torch_both_seed456_ep1_steps9000_meta.json",
+  "episodes": 5,
+  "timestamp": "2025-10-22T02:06:55.943392",
+  "behavioral_analysis": {
+    "figures": [
+      "experiments/results/both_joints_analysis/analysis_20251022_020655/figures/control_patterns.png",
+      "experiments/results/both_joints_analysis/analysis_20251022_020655/figures/trajectory_comparison.png"
+    ],
+    "metrics": {
+      "nn_avg_reward": 0.32221992851930653,
+      "fsm_avg_reward": 0.16126531486984613,
+      "reward_improvement": 0.1609546136494604,
+      "nn_total_distance": 1.5630851344890164,
+      "fsm_total_distance": 28.56890126003644
+    }
+  },
+  "robustness_testing": {
+    "figures": [
+      "experiments/results/both_joints_analysis/analysis_20251022_020655/figures/robustness_testing.png",
+      "experiments/results/both_joints_analysis/analysis_20251022_020655/figures/robustness_summary_table.png"
+    ],
+    "metrics": {
+      "avg_nn_reward": 24.03986770915252,
+      "avg_fsm_reward": 322.53062973969236,
+      "improvement": -298.4907620305398
+    }
+  },
+  "summary_report": "experiments/results/both_joints_analysis/analysis_20251022_020655/figures/analysis_report.png"
+}

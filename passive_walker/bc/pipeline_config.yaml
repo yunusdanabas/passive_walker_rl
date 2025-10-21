@@ -56,8 +56,8 @@ min_episodes: 50  # Minimum episodes required (skip collection if available)
 # =============================================================================
 
 # Directories
-data_dir: "data/fsm_runs"
-results_dir: "results/bc_pipeline"
+data_dir: "experiments/data/fsm_runs"
+results_dir: "experiments/results/bc_pipeline"
 
 # Random seed
 seed: 123
@@ -75,7 +75,7 @@ quick_test:
   epochs: 5
   eval_episodes: 3
   gui: false
-  results_dir: "results/quick_test"
+  results_dir: "experiments/results/quick_test"
 
 # Full control configuration
 full_control:
@@ -102,7 +102,7 @@ advanced:
     w4: 0.05
   eval_episodes: 15
   gui: false
-  results_dir: "results/advanced_bc"
+  results_dir: "experiments/results/advanced_bc"
 
 # Advanced hip-only configuration (should work better)
 advanced_hip:
@@ -117,4 +117,4 @@ advanced_hip:
   eval_episodes: 20
   eval_seconds: 30.0
   gui: true
-  results_dir: "results/advanced_hip"
+  results_dir: "experiments/results/advanced_hip"

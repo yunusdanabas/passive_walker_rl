@@ -18,7 +18,7 @@ class TrainingConfig:
     # Core training parameters
     backend: str = "torch"  # "torch" or "jax"
     section: str = "both"   # "hip", "knees", or "both"
-    data_dir: str = "data/fsm_demos"
+    data_dir: str = "experiments/data/fsm_demos"
     epochs: int = 100
     batch_size: int = 64
     learning_rate: float = 1e-3
@@ -42,7 +42,7 @@ class TrainingConfig:
     # Logging and checkpointing
     log_interval: int = 10
     save_interval: int = 50
-    checkpoint_dir: str = "checkpoints"
+    checkpoint_dir: str = "experiments/models"
     
     # Validation parameters
     validate_every: int = 5
@@ -162,7 +162,7 @@ class TrainingConfig:
         return cls(
             backend=getattr(args, 'backend', 'torch'),
             section=getattr(args, 'section', 'both'),
-            data_dir=getattr(args, 'data_dir', 'data/fsm_demos'),
+            data_dir=getattr(args, 'data_dir', 'experiments/data/fsm_demos'),
             epochs=getattr(args, 'epochs', 100),
             batch_size=getattr(args, 'batch_size', 64),
             learning_rate=getattr(args, 'learning_rate', 1e-3),
@@ -178,7 +178,7 @@ class TrainingConfig:
             dropout=getattr(args, 'dropout', 0.0),
             log_interval=getattr(args, 'log_interval', 10),
             save_interval=getattr(args, 'save_interval', 50),
-            checkpoint_dir=getattr(args, 'checkpoint_dir', 'checkpoints'),
+            checkpoint_dir=getattr(args, 'checkpoint_dir', 'experiments/models'),
             validate_every=getattr(args, 'validate_every', 5),
             early_stopping_patience=getattr(args, 'early_stopping_patience', 20),
         )
@@ -190,7 +190,7 @@ class EvaluationConfig:
     
     # Model and data
     checkpoint_path: str
-    data_dir: str = "data/fsm_demos"
+    data_dir: str = "experiments/data/fsm_demos"
     backend: str = "torch"
     
     # Evaluation parameters
@@ -204,7 +204,7 @@ class EvaluationConfig:
     randomization_profile: Optional[str] = None
     
     # Output
-    output_dir: str = "evaluation_results"
+    output_dir: str = "experiments/outputs/metrics"
     save_trajectories: bool = True
     generate_plots: bool = True
     
