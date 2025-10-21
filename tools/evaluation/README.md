@@ -10,7 +10,7 @@ This directory contains scripts for evaluating and comparing BC models.
 **Usage:**
 ```bash
 cd /home/yunusdanabas/passive_walker_rl
-python evaluation_scripts/comprehensive_evaluation.py
+python tools/evaluation/comprehensive_evaluation.py
 ```
 
 **Features:**
@@ -25,7 +25,7 @@ python evaluation_scripts/comprehensive_evaluation.py
 **Usage:**
 ```bash
 cd /home/yunusdanabas/passive_walker_rl
-python evaluation_scripts/comprehensive_comparison.py
+python tools/evaluation/comprehensive_comparison.py
 ```
 
 **Features:**
@@ -40,7 +40,7 @@ python evaluation_scripts/comprehensive_comparison.py
 **Usage:**
 ```bash
 cd /home/yunusdanabas/passive_walker_rl
-python evaluation_scripts/evaluate_proper.py
+python tools/evaluation/evaluate_proper.py
 ```
 
 **Features:**
@@ -55,7 +55,7 @@ python evaluation_scripts/evaluate_proper.py
 **Usage:**
 ```bash
 cd /home/yunusdanabas/passive_walker_rl
-python evaluation_scripts/evaluate_comparison.py
+python tools/evaluation/evaluate_comparison.py
 ```
 
 **Features:**
@@ -66,17 +66,17 @@ python evaluation_scripts/evaluate_comparison.py
 ## Model Paths
 
 All scripts expect models to be located in:
-- `checkpoints/checkpoints_baseline/` - Baseline model
-- `checkpoints/checkpoints_enhanced/` - Enhanced model
-- `checkpoints/checkpoints_gentle/` - Gentle condition model
-- `checkpoints/checkpoints_low_friction/` - Low friction model
-- `checkpoints/checkpoints_mass_jitter/` - Mass jitter model
+- `experiments/models/baseline/` - Baseline model
+- `experiments/models/enhanced/` - Enhanced model
+- `experiments/models/gentle/` - Gentle condition model
+- `experiments/models/low_friction/` - Low friction model
+- `experiments/models/mass_jitter/` - Mass jitter model
 
 ## Output
 
 Scripts generate:
-- **Plots**: Saved to `evaluation_plots/`
-- **Reports**: Saved to `evaluation_reports/`
+- **Plots**: Saved to `experiments/outputs/plots/`
+- **Reports**: Saved to `experiments/outputs/reports/`
 - **Console output**: Detailed metrics and comparisons
 
 ## Recommended Usage
@@ -88,6 +88,6 @@ Scripts generate:
 
 ## Requirements
 
-- All trained models must be present in `checkpoints/` directory
+- All trained models must be present in `experiments/models/` directory
 - Environment must be properly configured
 - Required Python packages: torch, numpy, matplotlib

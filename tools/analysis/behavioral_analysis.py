@@ -51,7 +51,7 @@ def load_model_and_normalizer(checkpoint_path: str, meta_path: str):
     return model, normalizer, meta
 
 
-def collect_episode_data(env, model, normalizer, episodes: int = 10, model_type: str = "nn"):
+def collect_episode_data(env, model, normalizer, episodes: int = 10, model_type: str = "nn", metadata: dict = None):
     """Collect episode data for analysis with frame stacking support."""
     data = {
         'times': [],
@@ -92,7 +92,7 @@ def collect_episode_data(env, model, normalizer, episodes: int = 10, model_type:
                     model_output = model(torch.tensor(x_normalized, dtype=torch.float32))[0].numpy()
                 
                 mode = env.mode
-                section = "both" if mode == "research" else mode.replace("hybrid_", "")
+                section = metadata.get('section', 'both')  # Use section from metadata
                 action = _assemble_action_torch(section, model_output, None, None, None, "act")
             else:
                 action = np.array([0.0, 0.0, 0.0], dtype=np.float32)
@@ -282,7 +282,7 @@ def run_behavioral_analysis(checkpoint_path: str, meta_path: str,
     
     # Collect data
     print("   Collecting NN data...")
-    nn_data = collect_episode_data(env_nn, model, normalizer, episodes, "nn")
+    nn_data = collect_episode_data(env_nn, model, normalizer, episodes, "nn", meta)
     
     print("   Collecting FSM data...")
     fsm_data = collect_episode_data(env_fsm, None, None, episodes, "fsm")

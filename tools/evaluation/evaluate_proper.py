@@ -133,30 +133,25 @@ def main():
     print("=== Proper BC Model Evaluation ===")
     
     # Model paths
-    baseline_path = "checkpoints/checkpoints_baseline/torch_both_seed123_ep1_steps180000.pt"
-    enhanced_path = "checkpoints/checkpoints_enhanced/torch_both_seed123_ep1_steps18000.pt"
+    # Use our newly trained models
+    hip_model_path = "experiments/models/torch_hip_seed123_ep1_steps9000.pt"
+    both_model_path = "experiments/models/torch_both_seed456_ep1_steps9000.pt"
     
     results = []
     
-    # Evaluate baseline model
-    if os.path.exists(baseline_path):
-        baseline_fsm = evaluate_model_with_actual_model(baseline_path, "Baseline", episodes=5, mode='fsm')
-        results.append(baseline_fsm)
-        
-        baseline_research = evaluate_model_with_actual_model(baseline_path, "Baseline", episodes=5, mode='research')
-        results.append(baseline_research)
+    # Evaluate hip model
+    if os.path.exists(hip_model_path):
+        hip_fsm = evaluate_model_with_actual_model(hip_model_path, "Hip Control", episodes=3, mode='fsm')
+        results.append(hip_fsm)
     else:
-        print(f"Baseline model not found: {baseline_path}")
+        print(f"Hip model not found: {hip_model_path}")
     
-    # Evaluate enhanced model
-    if os.path.exists(enhanced_path):
-        enhanced_fsm = evaluate_model_with_actual_model(enhanced_path, "Enhanced", episodes=5, mode='fsm')
-        results.append(enhanced_fsm)
-        
-        enhanced_research = evaluate_model_with_actual_model(enhanced_path, "Enhanced", episodes=5, mode='research')
-        results.append(enhanced_research)
+    # Evaluate both joints model
+    if os.path.exists(both_model_path):
+        both_fsm = evaluate_model_with_actual_model(both_model_path, "Both Joints", episodes=3, mode='fsm')
+        results.append(both_fsm)
     else:
-        print(f"Enhanced model not found: {enhanced_path}")
+        print(f"Both joints model not found: {both_model_path}")
     
     # Print comparison summary
     print("\n=== COMPARISON SUMMARY ===")

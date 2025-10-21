@@ -215,8 +215,8 @@ except Exception as e:
 print("\n8️⃣  Testing analysis module imports...")
 try:
     sys.path.insert(0, str(Path.cwd()))
-    from analysis.behavioral_analysis import run_behavioral_analysis
-    from analysis.robustness_testing import run_robustness_testing
+    from tools.analysis.behavioral_analysis import run_behavioral_analysis
+    from tools.analysis.robustness_testing import run_robustness_testing
     print("   ✅ Analysis modules imported successfully")
 except Exception as e:
     print(f"   ❌ Analysis module import failed: {e}")

@@ -19,11 +19,11 @@ import sys
 from datetime import datetime
 
 # Add project root to path
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from .behavioral_analysis import run_behavioral_analysis
-from .robustness_testing import run_robustness_testing
+from tools.analysis.behavioral_analysis import run_behavioral_analysis
+from tools.analysis.robustness_testing import run_robustness_testing
 
 
 def create_output_structure(base_dir: Path):

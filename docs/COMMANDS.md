@@ -448,7 +448,7 @@ tar -czf analysis_$(date +%Y%m%d_%H%M%S).tar.gz results/latest_analysis/
 ## 📊 Expected Outputs
 
 ### Training Results
-**Location:** `checkpoints/` or custom `--save-dir`
+**Location:** `experiments/models/` or custom `--save-dir`
 
 **Files Generated:**
 - `torch_hip_seed123_ep1_steps180000.pt` - Trained model weights
@@ -504,12 +504,12 @@ python -c "from passive_walker.core.env import PassiveWalkerEnv; print('✅ Envi
 **Missing Checkpoint Files:**
 ```bash
 # Check available checkpoints
-ls -la checkpoints/
+ls -la experiments/models/
 
 # Use available checkpoint
-python -m analysis.run_analysis_pipeline \
-    --checkpoint checkpoints/YOUR_CHECKPOINT_HERE.pt \
-    --meta checkpoints/YOUR_META_HERE.json \
+python -m tools.analysis.run_analysis_pipeline \
+    --checkpoint experiments/models/YOUR_CHECKPOINT_HERE.pt \
+    --meta experiments/models/YOUR_META_HERE.json \
     --episodes 3
 ```
 
@@ -536,7 +536,7 @@ netstat -tulpn | grep python
 - **Analysis Pipeline:** Compares NN vs FSM performance with comprehensive visualizations  
 - **Optimization Pipeline:** Searches for best hyperparameters, architectures, and training strategies
 - **Runtime Estimates:** Based on standard hardware; actual times may vary
-- **Output Organization:** Results are timestamped and organized in `results/` and `checkpoints/` directories
+- **Output Organization:** Results are timestamped and organized in `experiments/results/` and `experiments/models/` directories
 - **Latest Symlinks:** `results/latest_analysis/` and `results/model_optimization/latest_optimization/` always point to most recent runs
 
 ### Training Tips

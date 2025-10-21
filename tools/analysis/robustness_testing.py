@@ -49,7 +49,7 @@ def load_model_and_normalizer(checkpoint_path: str, meta_path: str):
 
 
 def test_physics_variation(env, model, normalizer, variation_type: str, 
-                          episodes: int = 5, model_type: str = "nn"):
+                          episodes: int = 5, model_type: str = "nn", metadata: dict = None):
     """Test model under physics variations."""
     # Detect frame stacking
     frame_stack = 1
@@ -85,7 +85,7 @@ def test_physics_variation(env, model, normalizer, variation_type: str,
                     model_output = model(torch.tensor(x_normalized, dtype=torch.float32))[0].numpy()
                 
                 mode = env.mode
-                section = "both" if mode == "research" else mode.replace("hybrid_", "")
+                section = metadata.get('section', 'both') if metadata else 'both'
                 action = _assemble_action_torch(section, model_output, None, None, None, "act")
             else:
                 action = np.array([0.0, 0.0, 0.0], dtype=np.float32)
@@ -280,7 +280,7 @@ def run_robustness_testing(checkpoint_path: str, meta_path: str,
         # Test NN
         env_nn = PassiveWalkerEnv(mode="research", use_gui=False)
         results['nn'][condition_name] = test_physics_variation(
-            env_nn, model, normalizer, condition_name, episodes, "nn"
+            env_nn, model, normalizer, condition_name, episodes, "nn", meta
         )
         env_nn.close()
         

@@ -137,32 +137,24 @@ def main():
     print("=== BC Model Comparison Evaluation ===")
     
     # Model paths
-    baseline_path = "checkpoints/checkpoints_baseline/torch_both_seed123_ep1_steps180000.pt"
-    enhanced_path = "checkpoints/checkpoints_enhanced/torch_both_seed123_ep1_steps18000.pt"
+    hip_path = "experiments/models/torch_hip_seed123_ep1_steps9000.pt"
+    both_path = "experiments/models/torch_both_seed456_ep1_steps9000.pt"
     
     results = []
     
-    # Evaluate baseline model
-    if os.path.exists(baseline_path):
-        baseline_results = evaluate_model_simple(baseline_path, "Baseline")
-        results.append(baseline_results)
-        
-        # Also evaluate with enhanced rewards
-        baseline_enhanced = evaluate_with_enhanced_rewards(baseline_path, "Baseline")
-        results.append(baseline_enhanced)
+    # Evaluate hip model
+    if os.path.exists(hip_path):
+        hip_results = evaluate_model_simple(hip_path, "Hip Control")
+        results.append(hip_results)
     else:
-        print(f"Baseline model not found: {baseline_path}")
+        print(f"Hip model not found: {hip_path}")
     
-    # Evaluate enhanced model
-    if os.path.exists(enhanced_path):
-        enhanced_results = evaluate_model_simple(enhanced_path, "Enhanced")
-        results.append(enhanced_results)
-        
-        # Also evaluate with enhanced rewards
-        enhanced_enhanced = evaluate_with_enhanced_rewards(enhanced_path, "Enhanced")
-        results.append(enhanced_enhanced)
+    # Evaluate both joints model
+    if os.path.exists(both_path):
+        both_results = evaluate_model_simple(both_path, "Both Joints")
+        results.append(both_results)
     else:
-        print(f"Enhanced model not found: {enhanced_path}")
+        print(f"Both joints model not found: {both_path}")
     
     # Print comparison summary
     print("\n=== COMPARISON SUMMARY ===")

@@ -11,28 +11,26 @@ passive_walker_rl/
 │   ├── bc/                 # Behavior Cloning implementation
 │   ├── fsm/                # Finite State Machine controller
 │   └── ppo/                # PPO implementation
-├── checkpoints/             # Trained model checkpoints
-│   ├── checkpoints_baseline/
-│   ├── checkpoints_enhanced/
-│   ├── checkpoints_gentle/
-│   ├── checkpoints_low_friction/
-│   └── checkpoints_mass_jitter/
-├── evaluation_scripts/      # Model evaluation scripts
-│   ├── comprehensive_evaluation.py
-│   ├── comprehensive_comparison.py
-│   ├── evaluate_proper.py
-│   └── evaluate_comparison.py
-├── reports/                 # Analysis reports
-│   ├── FINAL_REPORT.md
-│   └── TRAINING_EVALUATION_RESULTS.md
-├── outputs/                 # Evaluation outputs
-│   ├── evaluation_plots/
-│   ├── evaluation_reports/
-│   └── evaluation_results/
-├── data/                    # Training data
-├── tests/                   # Unit tests
-├── analysis/                # Analysis tools
-└── _legacy/                 # Legacy code
+├── experiments/             # All experimental work
+│   ├── models/             # Trained model checkpoints
+│   ├── data/               # Training datasets
+│   ├── results/            # Experiment results
+│   └── outputs/            # Evaluation outputs
+│       ├── plots/          # Evaluation plots
+│       ├── reports/        # Evaluation reports
+│       └── metrics/        # Evaluation metrics
+├── tools/                  # Analysis and utility tools
+│   ├── evaluation/         # Model evaluation scripts
+│   ├── analysis/          # Analysis tools
+│   └── visualization/     # Plotting and visualization
+├── docs/                   # Documentation
+│   ├── reports/           # Analysis reports
+│   ├── guides/            # User guides
+│   └── api/               # API documentation
+├── tests/                  # Unit tests
+├── config/                 # Configuration files
+├── scripts/                # Utility scripts
+└── _legacy/                # Legacy code
 ```
 
 ## Quick Start

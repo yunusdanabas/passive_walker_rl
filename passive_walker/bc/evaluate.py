@@ -464,7 +464,7 @@ def evaluate_model_comprehensive(checkpoint_path: str, config: EvaluationConfig)
 if __name__ == "__main__":
     # Example usage
     config = EvaluationConfig(
-        checkpoint_path="checkpoints/torch_both_seed123_ep1_steps180000.pt",
+        checkpoint_path="experiments/models/torch_both_seed123_ep1_steps180000.pt",
         episodes=5,
         duration_sec=25.0,
         physics_conditions=["nominal", "gentle", "steep"],

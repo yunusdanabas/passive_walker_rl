@@ -338,11 +338,8 @@ def main():
     
     # Model paths and names
     models_to_evaluate = [
-        ("checkpoints/checkpoints_baseline/torch_both_seed123_ep1_steps180000.pt", "Baseline"),
-        ("checkpoints/checkpoints_enhanced/torch_both_seed123_ep1_steps18000.pt", "Enhanced"),
-        ("checkpoints/checkpoints_gentle/torch_both_seed456_ep1_steps18000.pt", "Gentle"),
-        ("checkpoints/checkpoints_low_friction/torch_both_seed789_ep1_steps18000.pt", "Low_Friction"),
-        ("checkpoints/checkpoints_mass_jitter/torch_both_seed101112_ep1_steps18000.pt", "Mass_Jitter"),
+        ("experiments/models/torch_hip_seed123_ep1_steps9000.pt", "Hip Control"),
+        ("experiments/models/torch_both_seed456_ep1_steps9000.pt", "Both Joints"),
     ]
     
     all_results = {}

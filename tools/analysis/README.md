@@ -18,29 +18,29 @@ analysis_code/
 ### Run Complete Analysis
 
 ```bash
-python analysis_code/run_analysis_pipeline.py \
-    --checkpoint checkpoints/torch_both_seed123_ep1_steps180000.pt \
-    --meta checkpoints/torch_both_seed123_ep1_steps180000_meta.json \
+python tools/analysis/run_analysis_pipeline.py \
+    --checkpoint experiments/models/torch_both_seed123_ep1_steps180000.pt \
+    --meta experiments/models/torch_both_seed123_ep1_steps180000_meta.json \
     --episodes 10
 ```
 
 **Output:**
-- `results/analysis_YYYYMMDD_HHMMSS/figures/` - All visualizations
-- `results/analysis_YYYYMMDD_HHMMSS/data/` - Metrics & metadata
-- `results/latest_analysis/` - Symlink to most recent run
+- `experiments/results/analysis_YYYYMMDD_HHMMSS/figures/` - All visualizations
+- `experiments/results/analysis_YYYYMMDD_HHMMSS/data/` - Metrics & metadata
+- `experiments/results/latest_analysis/` - Symlink to most recent run
 
 ### Run Model Optimization
 
 ```bash
-python analysis_code/run_model_optimization.py \
+python tools/analysis/run_model_optimization.py \
     --config passive_walker/bc/pipeline_config.yaml \
     --components all \
     --max-trials 25
 ```
 
 **Output:**
-- `results/model_optimization/optimization_YYYYMMDD_HHMMSS/` - All optimization results
-- `results/model_optimization/latest_optimization/` - Symlink to most recent run
+- `experiments/results/model_optimization/optimization_YYYYMMDD_HHMMSS/` - All optimization results
+- `experiments/results/model_optimization/latest_optimization/` - Symlink to most recent run
 
 ## 📊 Analysis Components
 
@@ -109,11 +109,11 @@ python analysis_code/run_model_optimization.py \
 ### Analysis Pipeline Options
 
 ```bash
-python analysis_code/run_analysis_pipeline.py \
+python tools/analysis/run_analysis_pipeline.py \
     --checkpoint PATH         # Required: Model checkpoint
     --meta PATH              # Required: Model metadata JSON
     --episodes N             # Default: 10
-    --output-dir DIR         # Default: results
+    --output-dir DIR         # Default: experiments/results
     --skip-behavioral        # Skip behavioral analysis
     --skip-robustness        # Skip robustness testing
 ```
@@ -121,19 +121,19 @@ python analysis_code/run_analysis_pipeline.py \
 ### Optimization Pipeline Options
 
 ```bash
-python analysis_code/run_model_optimization.py \
+python tools/analysis/run_model_optimization.py \
     --config PATH                    # Required: Pipeline config YAML
     --components COMP [COMP ...]     # hyperparams, architecture, advanced, multiobjective, all
     --max-trials N                   # Default: 25
     --method METHOD                  # grid or random (default: random)
-    --output-dir DIR                 # Default: results/model_optimization
+    --output-dir DIR                 # Default: experiments/results/model_optimization
 ```
 
 ## 📈 Output Examples
 
 ### Analysis Run Output Structure
 ```
-results/analysis_20251020_103045/
+experiments/results/analysis_20251020_103045/
 ├── figures/
 │   ├── control_patterns.png           # 3x3 behavioral analysis grid
 │   ├── trajectory_comparison.png      # Performance comparison
@@ -146,7 +146,7 @@ results/analysis_20251020_103045/
 
 ### Optimization Run Output Structure
 ```
-results/model_optimization/optimization_20251020_120000/
+experiments/results/model_optimization/optimization_20251020_120000/
 ├── hyperparameters/
 │   ├── trial_001/ ... trial_025/
 │   └── random_search_final.json
@@ -162,16 +162,16 @@ results/model_optimization/optimization_20251020_120000/
 ## 🔄 Integration with Main Project
 
 ### File Locations
-- **Analysis input**: Models from `checkpoints/`
-- **Analysis output**: `results/` (consolidated)
-- **Old results**: Archived in `results/behavior_analysis/`, `results/robustness_testing/`, `results/model_optimization/`
+- **Analysis input**: Models from `experiments/models/`
+- **Analysis output**: `experiments/results/` (consolidated)
+- **Old results**: Archived in `experiments/results/behavior_analysis/`, `experiments/results/robustness_testing/`, `experiments/results/model_optimization/`
 
 ### Workflow
-1. Train model → `checkpoints/model.pt`
-2. Run analysis → `results/analysis_TIMESTAMP/`
+1. Train model → `experiments/models/model.pt`
+2. Run analysis → `experiments/results/analysis_TIMESTAMP/`
 3. Review visualizations in `figures/`
-4. Run optimization → `results/model_optimization/optimization_TIMESTAMP/`
-5. Access latest via symlink → `results/latest_analysis/`
+4. Run optimization → `experiments/results/model_optimization/optimization_TIMESTAMP/`
+5. Access latest via symlink → `experiments/results/latest_analysis/`
 
 ## 🛠️ Development
 
