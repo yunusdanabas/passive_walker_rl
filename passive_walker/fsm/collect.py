@@ -31,6 +31,10 @@ COMPRESS_NPZ = True
 EARLY_ABORT_THRESHOLD = 0.30  # 30% fall rate
 EARLY_ABORT_EPISODES = 10     # Check after first 10 episodes
 
+# Observation noise parameters
+OBS_NOISE_POSITION_STD = 0.015  # ±1.5% noise on positions (x, z, angles)
+OBS_NOISE_VELOCITY_STD = 0.025  # ±2.5% noise on velocities
+
 # Duration presets for different gait cycle targets
 DURATION_PRESETS = {
     "short": 15.0,    # ~6-8 cycles
@@ -41,16 +45,31 @@ DURATION_PRESETS = {
 
 # Physics condition presets for structured diversity
 PHYSICS_PRESETS = {
+    # Baseline conditions
     "nominal": {"ramp_deg": 10.0, "friction": 0.9, "randomize": False},
     "gentle": {"ramp_deg": 8.0, "friction": 0.9, "randomize": False},
-    "low_friction": {"ramp_deg": 10.0, "friction": 0.6, "randomize": False},
-    "high_friction": {"ramp_deg": 10.0, "friction": 1.0, "randomize": False},
-    "mass_jitter": {"ramp_deg": 10.0, "friction": 0.9, "randomize": True},
-    "sweep_gentle_low": {"ramp_deg": 8.0, "friction": 0.6, "randomize": False},
     "very_gentle": {"ramp_deg": 7.0, "friction": 0.9, "randomize": False},
     "moderate": {"ramp_deg": 9.0, "friction": 0.9, "randomize": False},
+    
+    # Friction variations
+    "low_friction": {"ramp_deg": 10.0, "friction": 0.6, "randomize": False},
+    "very_low_friction": {"ramp_deg": 10.0, "friction": 0.4, "randomize": False},
     "medium_friction": {"ramp_deg": 10.0, "friction": 0.7, "randomize": False},
+    "high_friction": {"ramp_deg": 10.0, "friction": 1.0, "randomize": False},
+    
+    # Steep slopes
+    "steep": {"ramp_deg": 12.0, "friction": 0.9, "randomize": False},
+    "very_steep": {"ramp_deg": 13.0, "friction": 0.9, "randomize": False},
+    "extreme_steep": {"ramp_deg": 14.0, "friction": 0.9, "randomize": False},
+    
+    # Combined conditions
     "gentle_high": {"ramp_deg": 8.0, "friction": 1.0, "randomize": False},
+    "sweep_gentle_low": {"ramp_deg": 8.0, "friction": 0.6, "randomize": False},
+    "steep_low_friction": {"ramp_deg": 12.0, "friction": 0.6, "randomize": False},
+    "gentle_very_low": {"ramp_deg": 8.0, "friction": 0.4, "randomize": False},
+    
+    # Randomization
+    "mass_jitter": {"ramp_deg": 10.0, "friction": 0.9, "randomize": True},
 }
 
 
@@ -66,6 +85,38 @@ def _save_npz(path, payload, compress=True):
         np.savez(path, **payload)
 
 
+def _add_observation_noise(obs, noise_level, rng):
+    """
+    Add Gaussian noise to observation for robustness.
+    
+    Args:
+        obs: Observation array (11,) - [x, z, pitch, ẋ, ż, hip, lk, rk, hiṗ, lk̇, rk̇]
+        noise_level: Noise level multiplier (0.0 = no noise, 1.0 = full noise)
+        rng: Random number generator
+        
+    Returns:
+        Noisy observation
+    """
+    if noise_level <= 0:
+        return obs
+    
+    noisy_obs = obs.copy()
+    
+    # Position noise (indices 0-2 and 5-7: x, z, pitch, hip, lk, rk)
+    position_indices = [0, 1, 2, 5, 6, 7]
+    for i in position_indices:
+        noise = rng.normal(0, OBS_NOISE_POSITION_STD * noise_level)
+        noisy_obs[i] += noise * abs(obs[i]) if obs[i] != 0 else noise * 0.01
+    
+    # Velocity noise (indices 3-4 and 8-10: ẋ, ż, hiṗ, lk̇, rk̇)
+    velocity_indices = [3, 4, 8, 9, 10]
+    for i in velocity_indices:
+        noise = rng.normal(0, OBS_NOISE_VELOCITY_STD * noise_level)
+        noisy_obs[i] += noise * abs(obs[i]) if obs[i] != 0 else noise * 0.01
+    
+    return noisy_obs
+
+
 def _get_descriptive_dirname(condition, physics_params):
     """Generate descriptive directory name from physics parameters."""
     ramp = int(physics_params["ramp_deg"])
@@ -78,7 +129,7 @@ def _get_descriptive_dirname(condition, physics_params):
         return f"slope{ramp}_fric{friction:.1f}_nomass"
 
 
-def _create_metadata(episodes, duration_sec, steps, env, physics_condition, physics, seed_base=None):
+def _create_metadata(episodes, duration_sec, steps, env, physics_condition, physics, seed_base=None, obs_noise=0.0):
     """Create collection metadata dictionary."""
     return {
             "episodes": int(episodes),
@@ -97,6 +148,7 @@ def _create_metadata(episodes, duration_sec, steps, env, physics_condition, phys
             "friction": float(physics["friction"]),
             "randomize_physics": bool(physics["randomize"])
         },
+        "observation_noise": float(obs_noise),
             "schema": {
                 "obs": "(T+1,11)",
                 "act": "(T,3)",
@@ -157,10 +209,13 @@ def _create_quality_report(episode_lengths, episode_gait_cycles, episode_distanc
 # Main Collection Functions
 # =============================================================================
 
-def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, mode="fsm"):
+def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, mode="fsm", obs_noise=0.0, randomization_profile=None):
     """Collect FSM episodes with duration-based design and gait cycle validation."""
     # Setup
     os.makedirs(outdir, exist_ok=True)
+    
+    # Create RNG for observation noise
+    noise_rng = np.random.RandomState(seed + 9999 if seed is not None else None) if obs_noise > 0 else None
 
     # Get physics parameters
     if physics_condition and physics_condition in PHYSICS_PRESETS:
@@ -176,7 +231,8 @@ def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, m
         use_gui=False,
         ramp_deg=physics["ramp_deg"],
         friction=physics["friction"],
-        randomize_physics=physics["randomize"]
+        randomize_physics=physics["randomize"],
+        randomization_profile=randomization_profile
     )
     
     # Calculate steps based on environment control rate
@@ -188,7 +244,7 @@ def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, m
 
     # Save metadata
     if SAVE_META:
-        meta = _create_metadata(episodes, duration_sec, steps, env, physics_condition, physics, seed)
+        meta = _create_metadata(episodes, duration_sec, steps, env, physics_condition, physics, seed, obs_noise)
         with open(os.path.join(outdir, "meta.json"), "w") as f:
             json.dump(meta, f, indent=2)
 
@@ -253,6 +309,10 @@ def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, m
                 # (Consider adding PDController.norm() and using that here.)
                 raise RuntimeError("Collector currently supports mode='fsm', 'hybrid_hip', 'hybrid_knees' only for safe demos.")
             obs, r, done, info = env.step(action)
+            
+            # Add observation noise for robustness if enabled
+            if obs_noise > 0:
+                obs = _add_observation_noise(obs, obs_noise, noise_rng)
 
             # Count gait cycles via hip state transitions
             current_hip_state = env.fsm.fsm_hip
@@ -379,14 +439,24 @@ def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, m
     env.close()
 
 
-def collect_physics_sweep(episodes_per_condition, duration_sec, base_outdir, seed=None, conditions=None, mode="fsm"):
+def collect_physics_sweep(episodes_per_condition, duration_sec, base_outdir, seed=None, conditions=None, mode="fsm", obs_noise=0.0, randomization_profile=None):
     """Collect FSM data across multiple physics conditions with organized directory structure."""
     if conditions is None:
-        conditions = ["nominal", "gentle", "low_friction", "high_friction", "mass_jitter", "sweep_gentle_low"]
+        # Default: comprehensive sweep across major variations
+        conditions = [
+            "nominal", "gentle", "steep",  # Ramp variations
+            "low_friction", "high_friction",  # Friction variations
+            "sweep_gentle_low", "steep_low_friction",  # Combined extremes
+            "mass_jitter"  # Randomization
+        ]
     
     print(f"Physics Diversity Collection - {len(conditions)} conditions")
     print(f"Episodes per condition: {episodes_per_condition}")
     print(f"Duration per episode: {duration_sec:.1f}s")
+    if obs_noise > 0:
+        print(f"Observation noise: {obs_noise:.2f}")
+    if randomization_profile:
+        print(f"Randomization profile: {randomization_profile}")
     
     for i, condition in enumerate(conditions):
         print(f"\n--- Condition {i+1}/{len(conditions)}: {condition} ---")
@@ -397,7 +467,7 @@ def collect_physics_sweep(episodes_per_condition, duration_sec, base_outdir, see
         condition_dir = os.path.join(base_outdir, dirname)
         
         # Collect data for this condition
-        collect(episodes_per_condition, duration_sec, condition_dir, seed, condition, mode)
+        collect(episodes_per_condition, duration_sec, condition_dir, seed, condition, mode, obs_noise, randomization_profile)
         
         print(f"Completed {condition}: {episodes_per_condition} episodes in {condition_dir}")
     
@@ -433,6 +503,10 @@ def main():
                         help="Output directory")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED,
                         help="Random seed")
+    parser.add_argument("--obs-noise", type=float, default=0.0,
+                        help="Observation noise level (0.0=no noise, 1.0=full noise)")
+    parser.add_argument("--randomization-profile", type=str, choices=["none", "basic", "moderate", "aggressive", "temporal"],
+                        help="Advanced randomization profile for data collection")
     args = parser.parse_args()
     
     # Use preset if specified, otherwise use duration argument
@@ -442,14 +516,16 @@ def main():
         # Physics diversity collection
         print(f"FSM Physics Diversity Collection")
         print(f"Episodes per condition: {args.episodes}, Duration: {duration:.1f}s")
-        collect_physics_sweep(args.episodes, duration, args.out, args.seed, mode=args.mode)
+        collect_physics_sweep(args.episodes, duration, args.out, args.seed, mode=args.mode, obs_noise=args.obs_noise, randomization_profile=args.randomization_profile)
     else:
         # Single condition collection
         print(f"FSM Data Collection - Duration-based Design")
         print(f"Episodes: {args.episodes}, Duration: {duration:.1f}s")
         print(f"Expected gait cycles: ~{int(duration * 0.4):.0f}-{int(duration * 0.5):.0f} (8-10+ recommended)")
+        if args.obs_noise > 0:
+            print(f"Observation noise: {args.obs_noise:.2f}")
         
-        collect(args.episodes, duration, args.out, args.seed, args.physics, args.mode)
+        collect(args.episodes, duration, args.out, args.seed, args.physics, args.mode, args.obs_noise, args.randomization_profile)
 
 
 if __name__ == "__main__":

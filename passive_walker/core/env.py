@@ -20,6 +20,9 @@ RAMP_DEG = 10.0         # Incline angle (degrees, positive = downhill)
 FRICTION = 0.9          # Contact friction coefficient
 RANDOMIZE_PHYSICS = False  # Enable domain randomization
 MASS_JITTER = 0.05      # ±5% torso mass variation when randomization enabled
+RAMP_JITTER = 0.0       # Ramp angle variation (degrees, ±range when randomization enabled)
+FRICTION_MIN = 0.6      # Minimum friction coefficient when randomization enabled
+FRICTION_MAX = 1.0      # Maximum friction coefficient when randomization enabled
 
 # Rendering parameters
 DEFAULT_GUI = True      # Enable GUI when run as module
@@ -38,6 +41,7 @@ from mujoco.glfw import glfw
 
 from .controller import PDController, FSMStateMachine
 from .reward import get_reward_fn
+from .randomization import DomainRandomizer, RandomizationConfig, get_randomization_config
 
 
 class PassiveWalkerEnv(gym.Env):
@@ -48,23 +52,51 @@ class PassiveWalkerEnv(gym.Env):
         - 'fsm': Uses built-in FSM for stable walking (actions ignored)
         - 'research': Uses neural network actions for all joints
         - 'hybrid_hip': Uses neural network for hip, FSM for knees
+        - 'hybrid_knees': Uses FSM for hip, neural network for knees
+    
+    Args:
+        mode: Control mode (default: "fsm")
+        use_gui: Enable GUI rendering (default: False)
+        use_jax_pd: Use JAX backend for PD control (default: False, uses NumPy)
+        ramp_deg: Ramp angle in degrees (default: 10.0)
+        friction: Contact friction coefficient (default: 0.9)
+        randomize_physics: Enable domain randomization (default: False)
+        ramp_jitter: Ramp angle variation in degrees when randomizing (default: 0.0)
+        friction_min: Minimum friction when randomizing (default: 0.6)
+        friction_max: Maximum friction when randomizing (default: 1.0)
+        ctrl_hz: Control frequency in Hz (default: 100.0). Higher frequencies (e.g., 200Hz)
+                 may improve stability but increase computational cost.
+        randomization_profile: Use predefined advanced randomization profile 
+                               ("none", "basic", "moderate", "aggressive", "temporal").
+                               If None, uses basic randomization with above parameters.
     """
 
     metadata = {"render.modes": ["human"]}
 
     def __init__(self, mode: str = "fsm", use_gui: bool = False, use_jax_pd: bool = False,
-                 ramp_deg: float = None, friction: float = None, randomize_physics: bool = None):
+                 ramp_deg: float = None, friction: float = None, randomize_physics: bool = None,
+                 ramp_jitter: float = None, friction_min: float = None, friction_max: float = None,
+                 ctrl_hz: float = None, randomization_profile: str = None):
         super().__init__()
         assert mode in ("fsm", "research", "hybrid_hip", "hybrid_knees")
         self.mode = mode
         self.use_gui = use_gui
-        self.ctrl_hz = float(CTRL_HZ)
+        self.ctrl_hz = float(ctrl_hz if ctrl_hz is not None else CTRL_HZ)
         self.simend = float(SIM_SECONDS)
         
         # Physics parameters (use provided values or defaults)
-        self.ramp_deg = float(ramp_deg if ramp_deg is not None else RAMP_DEG)
-        self.friction = float(friction if friction is not None else FRICTION)
+        self._base_ramp_deg = float(ramp_deg if ramp_deg is not None else RAMP_DEG)
+        self._base_friction = float(friction if friction is not None else FRICTION)
+        self.ramp_deg = self._base_ramp_deg
+        self.friction = self._base_friction
         self.randomize_physics = bool(randomize_physics if randomize_physics is not None else RANDOMIZE_PHYSICS)
+        self.ramp_jitter = float(ramp_jitter if ramp_jitter is not None else RAMP_JITTER)
+        self.friction_min = float(friction_min if friction_min is not None else FRICTION_MIN)
+        self.friction_max = float(friction_max if friction_max is not None else FRICTION_MAX)
+        
+        # Advanced randomization
+        self.randomization_profile = randomization_profile
+        self.domain_randomizer = None  # Initialized after model loading
 
         self.window = None
         self._np_rng = None  # Random number generator
@@ -155,6 +187,13 @@ class PassiveWalkerEnv(gym.Env):
         
         # Cache original torso mass for domain randomization
         self._torso_mass0 = float(self.model.body_mass[self.b_torso])
+        
+        # Initialize domain randomizer if profile specified
+        if self.randomization_profile is not None:
+            # Will be fully initialized in reset() when RNG is available
+            self._randomization_config = get_randomization_config(self.randomization_profile)
+        else:
+            self._randomization_config = None
 
     def _apply_base_physics(self):
         """Set up base physics parameters (gravity, friction)."""
@@ -165,11 +204,32 @@ class PassiveWalkerEnv(gym.Env):
     def _randomize_physics(self):
         """Apply domain randomization to physics parameters."""
         assert self._np_rng is not None
-        # Apply base physics
+        
+        # Use advanced randomization if profile is set
+        if self._randomization_config is not None:
+            if self.domain_randomizer is None:
+                self.domain_randomizer = DomainRandomizer(
+                    self._randomization_config, self.model, self._np_rng
+                )
+            self.ramp_deg, self.friction = self.domain_randomizer.randomize_all(
+                self._base_ramp_deg, self._base_friction
+            )
+        else:
+            # Basic randomization
+            if self.ramp_jitter > 0:
+                self.ramp_deg = self._np_rng.uniform(
+                    self._base_ramp_deg - self.ramp_jitter,
+                    self._base_ramp_deg + self.ramp_jitter
+                )
+            if self.friction_min < self.friction_max:
+                self.friction = self._np_rng.uniform(self.friction_min, self.friction_max)
+            
+            # Randomize torso mass
+            scale = self._np_rng.uniform(1.0 - MASS_JITTER, 1.0 + MASS_JITTER)
+            self.model.body_mass[self.b_torso] = self._torso_mass0 * scale
+        
+        # Apply physics with randomized parameters
         self._apply_base_physics()
-        # Randomize torso mass from original (prevents drift across resets)
-        scale = self._np_rng.uniform(1.0 - MASS_JITTER, 1.0 + MASS_JITTER)
-        self.model.body_mass[self.b_torso] = self._torso_mass0 * scale
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         """Reset environment to initial state."""
@@ -196,6 +256,9 @@ class PassiveWalkerEnv(gym.Env):
         self.data.time = 0.0
         self.prev_x = float(self.data.qpos[self.qpos_x])
         self._t_next = 1.0 / self.ctrl_hz  # First control step target
+        
+        # Initialize control change tracking for smooth motion penalty
+        self._prev_u = np.zeros(3, dtype=np.float32)
 
         return self._get_obs(), {}
 
@@ -287,12 +350,30 @@ class PassiveWalkerEnv(gym.Env):
         pitch_abs = abs(float(self.data.qpos[self.qpos_pitch]))
         ctrl_abs_sum = float(np.abs(self._u).sum())
         torso_z = float(self.data.xpos[self.b_torso, 2])
+        
+        # Additional signals for research mode
+        velocity_x = float(self.data.qvel[self.dof_x])
+        left_knee_pos = float(self.data.qpos[self.qpos_lk])
+        right_knee_pos = float(self.data.qpos[self.qpos_rk])
+        left_foot_z = float(self.data.xpos[self.b_lfoot, 2])
+        right_foot_z = float(self.data.xpos[self.b_rfoot, 2])
+        
+        # Control change penalty (smooth motion)
+        u_change_sum = float(np.abs(self._u - self._prev_u).sum()) if hasattr(self, '_prev_u') else 0.0
+        self._prev_u = self._u.copy()
 
         signals = {
             "dx": dx,
             "pitch_abs": pitch_abs,
             "u_abs_sum": ctrl_abs_sum,
             "torso_z": torso_z,
+            # Additional signals for research mode
+            "velocity_x": velocity_x,
+            "left_knee_pos": left_knee_pos,
+            "right_knee_pos": right_knee_pos,
+            "left_foot_z": left_foot_z,
+            "right_foot_z": right_foot_z,
+            "u_change_sum": u_change_sum,
         }
 
         reward, rinfo = self.reward_fn(signals)
@@ -393,6 +474,14 @@ def main():
     parser.set_defaults(gui=DEFAULT_GUI)
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
     
+    # Physics randomization arguments
+    parser.add_argument("--ramp-jitter", type=float, default=0.0, help="Ramp angle variation (degrees)")
+    parser.add_argument("--friction-min", type=float, default=0.6, help="Minimum friction coefficient")
+    parser.add_argument("--friction-max", type=float, default=1.0, help="Maximum friction coefficient")
+    parser.add_argument("--randomization-profile", type=str, choices=["none", "basic", "moderate", "aggressive", "temporal"],
+                        help="Advanced randomization profile")
+    parser.add_argument("--ctrl-hz", type=float, default=100.0, help="Control frequency (Hz)")
+    
     # PD Backend selection (mutually exclusive)
     # Default: NumPy (fastest for single environment)
     # JAX: Better for vectorized/batched operations
@@ -412,15 +501,42 @@ def main():
     use_gui = args.gui
     if use_gui:
         try:
-            env = PassiveWalkerEnv(mode=args.mode, use_gui=True, use_jax_pd=use_jax_pd)
+            env = PassiveWalkerEnv(
+                mode=args.mode, 
+                use_gui=True, 
+                use_jax_pd=use_jax_pd,
+                ramp_jitter=args.ramp_jitter,
+                friction_min=args.friction_min,
+                friction_max=args.friction_max,
+                randomization_profile=args.randomization_profile,
+                ctrl_hz=args.ctrl_hz
+            )
             print("✅ GUI mode enabled")
         except Exception as e:
             print(f"⚠️  GUI failed: {e}")
             print("🔄 Falling back to headless mode...")
             use_gui = False
-            env = PassiveWalkerEnv(mode=args.mode, use_gui=False, use_jax_pd=use_jax_pd)
+            env = PassiveWalkerEnv(
+                mode=args.mode, 
+                use_gui=False, 
+                use_jax_pd=use_jax_pd,
+                ramp_jitter=args.ramp_jitter,
+                friction_min=args.friction_min,
+                friction_max=args.friction_max,
+                randomization_profile=args.randomization_profile,
+                ctrl_hz=args.ctrl_hz
+            )
     else:
-        env = PassiveWalkerEnv(mode=args.mode, use_gui=False, use_jax_pd=use_jax_pd)
+        env = PassiveWalkerEnv(
+            mode=args.mode, 
+            use_gui=False, 
+            use_jax_pd=use_jax_pd,
+            ramp_jitter=args.ramp_jitter,
+            friction_min=args.friction_min,
+            friction_max=args.friction_max,
+            randomization_profile=args.randomization_profile,
+            ctrl_hz=args.ctrl_hz
+        )
     env.simend = float(args.seconds)
 
     obs, _ = env.reset(seed=args.seed)
