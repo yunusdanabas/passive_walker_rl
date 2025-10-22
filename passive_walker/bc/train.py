@@ -14,7 +14,8 @@ from .utils import (
     set_seed, set_global_seed, pick_device, ensure_dir, save_checkpoint, MetricsWriter, Normalizer,
     ckpt_name_for, meta_name_for, metrics_name_for, save_metrics_json
 )
-from .dataset import discover_npzs, split_by_episode, load_xy, create_data_loader
+from .dataset import discover_npzs, split_by_episode, load_xy, create_data_loader, create_sequence_loader_from_files
+from .augmentation import create_default_temporal_augmentation, create_light_temporal_augmentation, create_heavy_temporal_augmentation
 
 
 def compute_advanced_loss(pred, target, w1=1.0, w2=0.0, w3=0.1, w4=0.01):
@@ -450,6 +451,533 @@ def train_jax(args):
     save_metrics_json(metrics_path, hist_train, hist_val)
     
     print(f"[INFO] JAX training completed. Best val loss: {best_val_loss:.6f}")
+    print(f"[INFO] Model saved to: {ckpt_path}")
+    print(f"[INFO] Metrics saved to: {metrics_path}")
+
+
+def compute_temporal_loss(pred, target, mask, loss_type="l1", smoothness_weight=0.1):
+    """
+    Compute loss for temporal models with masking and smoothness penalty.
+    
+    Args:
+        pred: Model predictions (batch, seq_len, action_dim)
+        target: Ground truth targets (batch, seq_len, action_dim)
+        mask: Boolean mask for valid timesteps (batch, seq_len)
+        loss_type: Type of base loss ("l1", "mse", "smooth_l1")
+        smoothness_weight: Weight for temporal smoothness penalty
+    
+    Returns:
+        Total loss and component breakdown
+    """
+    import torch
+    
+    # Apply mask to predictions and targets
+    masked_pred = pred * mask.unsqueeze(-1).float()
+    masked_target = target * mask.unsqueeze(-1).float()
+    
+    # Base loss computation
+    if loss_type == "l1":
+        base_loss = torch.mean(torch.abs(masked_pred - masked_target))
+    elif loss_type == "mse":
+        base_loss = torch.mean((masked_pred - masked_target) ** 2)
+    elif loss_type == "smooth_l1":
+        base_loss = torch.nn.functional.smooth_l1_loss(masked_pred, masked_target)
+    else:
+        raise ValueError(f"Unknown loss type: {loss_type}")
+    
+    # Temporal smoothness penalty
+    if smoothness_weight > 0 and pred.size(1) > 1:
+        # Compute action differences across time
+        action_diff = pred[:, 1:] - pred[:, :-1]
+        # Apply mask to differences (only penalize valid transitions)
+        valid_transitions = mask[:, 1:] & mask[:, :-1]
+        masked_diff = action_diff * valid_transitions.unsqueeze(-1).float()
+        smoothness_loss = torch.mean(torch.abs(masked_diff))
+    else:
+        smoothness_loss = pred.new_tensor(0.0)
+    
+    total_loss = base_loss + smoothness_weight * smoothness_loss
+    
+    return total_loss, {
+        "base_loss": float(base_loss.detach()),
+        "smoothness_loss": float(smoothness_loss.detach()),
+        "total_loss": float(total_loss.detach())
+    }
+
+
+def train_temporal_torch(config):
+    """Train PyTorch temporal BC model with sequence data."""
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    from .models.temporal_torch import create_temporal_model
+    
+    # Setup device and data
+    device = pick_device(config.gpu if hasattr(config, 'gpu') else False)
+    print(f"[INFO] Using device: {device}")
+    
+    # Discover and split data
+    files = discover_npzs(config.data_dir)
+    train_files, val_files = split_by_episode(files, val_ratio=config.validation_split)
+    print(f"[INFO] Found {len(files)} episodes: {len(train_files)} train, {len(val_files)} val")
+    
+    # Create sequence data loaders
+    print("[INFO] Creating sequence data loaders...")
+    
+    # Determine augmentation
+    augmentation = None
+    if config.temporal_augmentation:
+        if config.augmentation_type == "light":
+            augmentation = create_light_temporal_augmentation()
+        elif config.augmentation_type == "heavy":
+            augmentation = create_heavy_temporal_augmentation()
+        else:
+            augmentation = create_default_temporal_augmentation()
+        print(f"[INFO] Using {config.augmentation_type} temporal augmentation")
+    
+    # Create training loader
+    train_loader = create_sequence_loader_from_files(
+        files=train_files,
+        section=config.section,
+        batch_size=config.batch_size,
+        label_type="act",
+        shuffle=True,
+        max_length=config.sequence_length,
+        window_size=config.window_size,
+        stride=config.stride,
+        padding_strategy=config.padding_strategy,
+        num_workers=0
+    )
+    
+    # Create validation loader
+    val_loader = create_sequence_loader_from_files(
+        files=val_files,
+        section=config.section,
+        batch_size=config.batch_size,
+        label_type="act",
+        shuffle=False,
+        max_length=config.sequence_length,
+        window_size=config.window_size,
+        stride=config.stride,
+        padding_strategy=config.padding_strategy,
+        num_workers=0
+    )
+    
+    # Get input/output dimensions from first batch
+    for obs_batch, action_batch, mask_batch in train_loader:
+        input_dim = obs_batch.shape[-1]
+        output_dim = action_batch.shape[-1]
+        break
+    
+    print(f"[INFO] Input dim: {input_dim}, Output dim: {output_dim}")
+    
+    # Create temporal model
+    model = create_temporal_model(
+        config.model_type,
+        input_dim,
+        output_dim,
+        hidden_size=config.hidden_size,
+        num_layers=config.num_layers,
+        bidirectional=config.bidirectional,
+        dropout=config.dropout
+    ).to(device)
+    
+    # Setup optimizer
+    optimizer = optim.Adam(model.parameters(), lr=config.learning_rate, weight_decay=1e-5)
+    
+    # Setup scheduler
+    scheduler = None
+    if config.scheduler == "plateau":
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5)
+    elif config.scheduler == "cosine":
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs)
+    
+    # Training setup
+    metrics_writer = MetricsWriter()
+    best_val_loss = float('inf')
+    patience_counter = 0
+    
+    # Create save directory
+    ensure_dir(config.checkpoint_dir)
+    
+    print(f"[INFO] Starting temporal training for {config.epochs} epochs...")
+    print(f"[INFO] Model: {config.model_type}, Hidden: {config.hidden_size}, Layers: {config.num_layers}")
+    
+    # Training loop
+    for epoch in range(config.epochs):
+        # Training phase
+        model.train()
+        train_loss = 0.0
+        train_batches = 0
+        train_metrics = {"base_loss": 0.0, "smoothness_loss": 0.0}
+        
+        for obs_batch, action_batch, mask_batch in train_loader:
+            obs_batch = obs_batch.to(device)
+            action_batch = action_batch.to(device)
+            mask_batch = mask_batch.to(device)
+            
+            # Apply temporal augmentation if enabled
+            if augmentation is not None:
+                obs_batch, action_batch, mask_batch = augmentation(obs_batch, action_batch, mask_batch)
+            
+            optimizer.zero_grad()
+            
+            # Forward pass
+            pred_batch, _ = model(obs_batch)  # Only take the output, ignore hidden state
+            
+            # Compute loss with masking
+            loss, loss_components = compute_temporal_loss(
+                pred_batch, action_batch, mask_batch,
+                loss_type=config.loss_type,
+                smoothness_weight=config.temporal_smoothness_weight
+            )
+            
+            # Backward pass with gradient clipping
+            loss.backward()
+            if config.gradient_clip_norm > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradient_clip_norm)
+            optimizer.step()
+            
+            train_loss += loss.item()
+            train_batches += 1
+            train_metrics["base_loss"] += loss_components["base_loss"]
+            train_metrics["smoothness_loss"] += loss_components["smoothness_loss"]
+        
+        avg_train_loss = train_loss / max(1, train_batches)
+        avg_train_metrics = {k: v / max(1, train_batches) for k, v in train_metrics.items()}
+        
+        # Validation phase
+        model.eval()
+        val_loss = 0.0
+        val_batches = 0
+        val_metrics = {"base_loss": 0.0, "smoothness_loss": 0.0}
+        
+        with torch.no_grad():
+            for obs_batch, action_batch, mask_batch in val_loader:
+                obs_batch = obs_batch.to(device)
+                action_batch = action_batch.to(device)
+                mask_batch = mask_batch.to(device)
+                
+                pred_batch, _ = model(obs_batch)  # Only take the output, ignore hidden state
+                loss, loss_components = compute_temporal_loss(
+                    pred_batch, action_batch, mask_batch,
+                    loss_type=config.loss_type,
+                    smoothness_weight=config.temporal_smoothness_weight
+                )
+                
+                val_loss += loss.item()
+                val_batches += 1
+                val_metrics["base_loss"] += loss_components["base_loss"]
+                val_metrics["smoothness_loss"] += loss_components["smoothness_loss"]
+        
+        avg_val_loss = val_loss / max(1, val_batches) if val_batches > 0 else float('nan')
+        avg_val_metrics = {k: v / max(1, val_batches) for k, v in val_metrics.items()}
+        
+        # Update scheduler
+        if scheduler is not None:
+            if config.scheduler == "plateau":
+                scheduler.step(avg_val_loss)
+            else:
+                scheduler.step()
+        
+        # Log metrics
+        metrics_writer.log_epoch(epoch, avg_train_loss, avg_val_loss)
+        print(f"Epoch {epoch:3d}: train_loss={avg_train_loss:.6f}, val_loss={avg_val_loss:.6f}")
+        print(f"         train_base={avg_train_metrics['base_loss']:.6f}, train_smooth={avg_train_metrics['smoothness_loss']:.6f}")
+        
+        # Early stopping and checkpointing
+        score = avg_val_loss if not np.isnan(avg_val_loss) else avg_train_loss
+        if score + 1e-8 < best_val_loss:
+            best_val_loss = score
+            patience_counter = 0
+            
+            # Save best model
+            meta = {
+                "backend": "torch",
+                "model_type": config.model_type,
+                "input_dim": input_dim,
+                "output_dim": output_dim,
+                "hidden_size": config.hidden_size,
+                "num_layers": config.num_layers,
+                "bidirectional": config.bidirectional,
+                "dropout": config.dropout,
+                "section": config.section,
+                "label_type": "act",
+                "dataset_path": config.data_dir,
+                "seed": config.seed,
+                "epoch": epoch,
+                "steps": len(train_files),
+                "best_val_loss": best_val_loss,
+                "sequence_length": config.sequence_length,
+                "window_size": config.window_size,
+                "stride": config.stride,
+                "padding_strategy": config.padding_strategy,
+                "temporal_augmentation": config.temporal_augmentation,
+                "augmentation_type": config.augmentation_type,
+                "loss_type": config.loss_type,
+                "temporal_smoothness_weight": config.temporal_smoothness_weight,
+                "gradient_clip_norm": config.gradient_clip_norm,
+            }
+            
+            # Create a dummy normalizer for checkpoint saving
+            from .utils import Normalizer
+            dummy_normalizer = Normalizer(mean=np.zeros(input_dim), std=np.ones(input_dim))
+            
+            checkpoint_path, meta_path = save_checkpoint(
+                model, dummy_normalizer, meta, config.checkpoint_dir,
+                config.section, config.seed, epoch, len(train_files)
+            )
+            print(f"[INFO] Saved checkpoint: {checkpoint_path}")
+        else:
+            patience_counter += 1
+        
+        if patience_counter >= config.early_stopping_patience:
+            print(f"[INFO] Early stopping at epoch {epoch} (patience={config.early_stopping_patience})")
+            break
+    
+    # Save final metrics
+    metrics_path = os.path.join(config.checkpoint_dir, f"torch_temporal_{config.section}_seed{config.seed}_metrics.json")
+    metrics_writer.save(metrics_path)
+    print(f"[INFO] Temporal training completed. Best val loss: {best_val_loss:.6f}")
+    print(f"[INFO] Metrics saved to: {metrics_path}")
+
+
+def train_temporal_jax(config):
+    """Train JAX temporal BC model with sequence data."""
+    import jax
+    import jax.numpy as jnp
+    import equinox as eqx
+    import optax
+    from .models.temporal_jax import make_temporal_model
+    
+    set_global_seed(config.seed)
+    
+    # Discover and split data
+    files = discover_npzs(config.data_dir)
+    train_files, val_files = split_by_episode(files, val_ratio=config.validation_split)
+    print(f"[INFO] Found {len(files)} episodes: {len(train_files)} train, {len(val_files)} val")
+    
+    # Create sequence data loaders
+    print("[INFO] Creating sequence data loaders...")
+    
+    # Create training loader
+    train_loader = create_sequence_loader_from_files(
+        files=train_files,
+        section=config.section,
+        batch_size=config.batch_size,
+        label_type="act",
+        shuffle=True,
+        max_length=config.sequence_length,
+        window_size=config.window_size,
+        stride=config.stride,
+        padding_strategy=config.padding_strategy,
+        num_workers=0
+    )
+    
+    # Create validation loader
+    val_loader = create_sequence_loader_from_files(
+        files=val_files,
+        section=config.section,
+        batch_size=config.batch_size,
+        label_type="act",
+        shuffle=False,
+        max_length=config.sequence_length,
+        window_size=config.window_size,
+        stride=config.stride,
+        padding_strategy=config.padding_strategy,
+        num_workers=0
+    )
+    
+    # Get input/output dimensions from first batch
+    for obs_batch, action_batch, mask_batch in train_loader:
+        input_dim = obs_batch.shape[-1]
+        output_dim = action_batch.shape[-1]
+        break
+    
+    print(f"[INFO] Input dim: {input_dim}, Output dim: {output_dim}")
+    
+    # Create temporal model
+    key = jax.random.PRNGKey(config.seed)
+    key, subkey = jax.random.split(key)
+    model = make_temporal_model(
+        config.model_type,
+        input_dim,
+        output_dim,
+        hidden_size=config.hidden_size,
+        dropout_rate=config.dropout,
+        key=subkey
+    )
+    
+    # Setup optimizer
+    filter_spec = eqx.is_array
+    optimizer = optax.adamw(learning_rate=config.learning_rate, weight_decay=1e-5)
+    opt_state = optimizer.init(eqx.filter(model, filter_spec))
+    
+    # Loss function with masking
+    def temporal_loss_fn(model, obs, actions, mask):
+        pred, _ = model(obs)  # Model returns (outputs, hidden_state)
+        
+        # Apply mask
+        masked_pred = pred * mask[..., None]
+        masked_target = actions * mask[..., None]
+        
+        # Base loss
+        if config.loss_type == "l1":
+            base_loss = jnp.mean(jnp.abs(masked_pred - masked_target))
+        elif config.loss_type == "mse":
+            base_loss = jnp.mean((masked_pred - masked_target) ** 2)
+        else:
+            base_loss = jnp.mean(jnp.abs(masked_pred - masked_target))
+        
+        # Temporal smoothness penalty
+        if config.temporal_smoothness_weight > 0 and pred.shape[1] > 1:
+            action_diff = pred[:, 1:] - pred[:, :-1]
+            valid_transitions = mask[:, 1:] & mask[:, :-1]
+            masked_diff = action_diff * valid_transitions[..., None]
+            smoothness_loss = jnp.mean(jnp.abs(masked_diff))
+        else:
+            smoothness_loss = 0.0
+        
+        total_loss = base_loss + config.temporal_smoothness_weight * smoothness_loss
+        return total_loss, {"base_loss": base_loss, "smoothness_loss": smoothness_loss}
+    
+    # JITed step
+    @eqx.filter_jit
+    def step(model, opt_state, obs, actions, mask):
+        (loss, metrics), grads = eqx.filter_value_and_grad(temporal_loss_fn, has_aux=True)(model, obs, actions, mask)
+        updates, opt_state = optimizer.update(grads, opt_state, eqx.filter(model, filter_spec))
+        model = eqx.apply_updates(model, updates)
+        return model, opt_state, loss, metrics
+    
+    @eqx.filter_jit
+    def eval_loss(model, obs, actions, mask):
+        return temporal_loss_fn(model, obs, actions, mask)
+    
+    # Training loop
+    best_val_loss = float('inf')
+    best_ckpt = None
+    patience_counter = 0
+    hist_train, hist_val = [], []
+    
+    # Create save directory
+    ensure_dir(config.checkpoint_dir)
+    
+    print(f"[INFO] Starting JAX temporal training for {config.epochs} epochs...")
+    print(f"[INFO] Model: {config.model_type}, Hidden: {config.hidden_size}, Layers: {config.num_layers}")
+    
+    for epoch in range(config.epochs):
+        # Training
+        model_loss = 0.0
+        batches = 0
+        train_metrics = {"base_loss": 0.0, "smoothness_loss": 0.0}
+        
+        for obs_batch, action_batch, mask_batch in train_loader:
+            obs_jax = jnp.asarray(obs_batch)
+            action_jax = jnp.asarray(action_batch)
+            mask_jax = jnp.asarray(mask_batch)
+            
+            model, opt_state, train_loss, metrics = step(model, opt_state, obs_jax, action_jax, mask_jax)
+            model_loss += float(train_loss)
+            batches += 1
+            train_metrics["base_loss"] += float(metrics["base_loss"])
+            train_metrics["smoothness_loss"] += float(metrics["smoothness_loss"])
+        
+        avg_train_loss = model_loss / max(1, batches)
+        avg_train_metrics = {k: v / max(1, batches) for k, v in train_metrics.items()}
+        hist_train.append(avg_train_loss)
+        
+        # Validation
+        val_loss = 0.0
+        val_batches = 0
+        val_metrics = {"base_loss": 0.0, "smoothness_loss": 0.0}
+        
+        for obs_batch, action_batch, mask_batch in val_loader:
+            obs_jax = jnp.asarray(obs_batch)
+            action_jax = jnp.asarray(action_batch)
+            mask_jax = jnp.asarray(mask_batch)
+            
+            loss, metrics = eval_loss(model, obs_jax, action_jax, mask_jax)
+            val_loss += float(loss)
+            val_batches += 1
+            val_metrics["base_loss"] += float(metrics["base_loss"])
+            val_metrics["smoothness_loss"] += float(metrics["smoothness_loss"])
+        
+        avg_val_loss = val_loss / max(1, val_batches) if val_batches > 0 else float('nan')
+        avg_val_metrics = {k: v / max(1, val_batches) for k, v in val_metrics.items()}
+        hist_val.append(avg_val_loss)
+        
+        print(f"Epoch {epoch:3d}: train_loss={avg_train_loss:.6f}, val_loss={avg_val_loss:.6f}")
+        print(f"         train_base={avg_train_metrics['base_loss']:.6f}, train_smooth={avg_train_metrics['smoothness_loss']:.6f}")
+        
+        # Early stopping and checkpointing
+        score = avg_val_loss if not np.isnan(avg_val_loss) else avg_train_loss
+        if score + 1e-8 < best_val_loss:
+            best_val_loss = score
+            patience_counter = 0
+            
+            # Save temporary checkpoint
+            tmp_ckpt = os.path.join(config.checkpoint_dir, f"tmp_best_temporal_{config.section}.eqx")
+            eqx.tree_serialise_leaves(tmp_ckpt, model)
+            best_ckpt = tmp_ckpt
+        else:
+            patience_counter += 1
+        
+        if patience_counter >= config.early_stopping_patience:
+            print(f"[INFO] Early stopping at epoch {epoch} (patience={config.early_stopping_patience})")
+            break
+    
+    # Load best model if early stopping occurred
+    if best_ckpt and os.path.exists(best_ckpt):
+        model = eqx.tree_deserialise_leaves(best_ckpt, model)
+        os.remove(best_ckpt)  # Clean up temp file
+    
+    # Save final artifacts
+    steps = len(train_files)
+    episodes = len(train_files)
+    stem = ckpt_name_for(backend="jax", section=config.section, seed=config.seed, episodes=episodes, steps=steps)
+    ckpt_path = os.path.join(config.checkpoint_dir, f"temporal_{stem}.eqx")
+    meta_path = os.path.join(config.checkpoint_dir, f"temporal_{meta_name_for(backend='jax', section=config.section, seed=config.seed, episodes=episodes, steps=steps)}")
+    metrics_path = os.path.join(config.checkpoint_dir, f"temporal_{metrics_name_for(backend='jax', section=config.section, seed=config.seed)}")
+    
+    # Save model
+    eqx.tree_serialise_leaves(ckpt_path, model)
+    
+    # Save metadata
+    meta_dict = {
+        "backend": "jax",
+        "model_type": config.model_type,
+        "section": config.section,
+        "seed": config.seed,
+        "episodes": episodes,
+        "steps": steps,
+        "in_dim": int(input_dim),
+        "out_dim": int(output_dim),
+        "hidden_size": config.hidden_size,
+        "num_layers": config.num_layers,
+        "dropout": config.dropout,
+        "lr": config.learning_rate,
+        "weight_decay": 1e-5,
+        "batch": config.batch_size,
+        "label_type": "act",
+        "sequence_length": config.sequence_length,
+        "window_size": config.window_size,
+        "stride": config.stride,
+        "padding_strategy": config.padding_strategy,
+        "temporal_augmentation": config.temporal_augmentation,
+        "augmentation_type": config.augmentation_type,
+        "loss_type": config.loss_type,
+        "temporal_smoothness_weight": config.temporal_smoothness_weight,
+        "files_train": train_files,
+        "files_val": val_files,
+    }
+    with open(meta_path, "w") as f:
+        import json
+        json.dump(meta_dict, f, indent=2)
+    
+    # Save metrics
+    save_metrics_json(metrics_path, hist_train, hist_val)
+    
+    print(f"[INFO] JAX temporal training completed. Best val loss: {best_val_loss:.6f}")
     print(f"[INFO] Model saved to: {ckpt_path}")
     print(f"[INFO] Metrics saved to: {metrics_path}")
 
