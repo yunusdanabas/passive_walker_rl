@@ -209,7 +209,7 @@ def create_dummy_episodes(data_dir, num_episodes=5):
 
 def test_load_sequences():
     """Test sequence loading function."""
-    from passive_walker.bc.dataset import load_sequences
+    from passive_walker.bc.data.dataset import load_sequences
     
     with tempfile.TemporaryDirectory() as temp_dir:
         create_dummy_episodes(temp_dir, num_episodes=3)
@@ -227,7 +227,7 @@ run_test("Sequence loading", test_load_sequences)
 
 def test_sequence_dataset():
     """Test SequenceDataset class."""
-    from passive_walker.bc.dataset import load_sequences, SequenceDataset
+    from passive_walker.bc.data.dataset import load_sequences, SequenceDataset
     
     with tempfile.TemporaryDirectory() as temp_dir:
         create_dummy_episodes(temp_dir, num_episodes=3)
@@ -247,7 +247,7 @@ run_test("SequenceDataset class", test_sequence_dataset)
 
 def test_sequence_loader():
     """Test sequence DataLoader creation."""
-    from passive_walker.bc.dataset import create_sequence_loader_from_files
+    from passive_walker.bc.data.dataset import create_sequence_loader_from_files
     
     with tempfile.TemporaryDirectory() as temp_dir:
         create_dummy_episodes(temp_dir, num_episodes=3)
@@ -276,7 +276,7 @@ test_section("Temporal Data Augmentation")
 def test_time_warping():
     """Test time warping augmentation."""
     import numpy as np
-    from passive_walker.bc.augmentation import TimeWarping
+    from passive_walker.bc.data.augmentation import TimeWarping
     
     aug = TimeWarping(warp_range=(0.8, 1.2))
     obs = np.random.randn(10, 11).astype(np.float32)
@@ -292,7 +292,7 @@ run_test("Time warping augmentation", test_time_warping)
 def test_temporal_jittering():
     """Test temporal jittering augmentation."""
     import numpy as np
-    from passive_walker.bc.augmentation import TemporalJittering
+    from passive_walker.bc.data.augmentation import TemporalJittering
     
     aug = TemporalJittering(max_shift=3)
     obs = np.random.randn(10, 11).astype(np.float32)
@@ -307,7 +307,7 @@ run_test("Temporal jittering", test_temporal_jittering)
 def test_subsequence_extraction():
     """Test subsequence extraction."""
     import numpy as np
-    from passive_walker.bc.augmentation import SubsequenceExtraction
+    from passive_walker.bc.data.augmentation import SubsequenceExtraction
     
     aug = SubsequenceExtraction(min_length_ratio=0.5)
     obs = np.random.randn(20, 11).astype(np.float32)
@@ -381,7 +381,7 @@ test_section("Training Pipeline Integration")
 def test_pytorch_temporal_training():
     """Test PyTorch temporal training end-to-end."""
     from passive_walker.bc.config import TemporalTrainingConfig
-    from passive_walker.bc.train import train_temporal_torch
+    from passive_walker.bc.training.train import train_temporal_torch
     
     with tempfile.TemporaryDirectory() as temp_dir:
         data_dir = os.path.join(temp_dir, "data")
@@ -411,7 +411,7 @@ run_test("PyTorch temporal training (2 epochs)", test_pytorch_temporal_training)
 def test_jax_temporal_training():
     """Test JAX temporal training end-to-end."""
     from passive_walker.bc.config import TemporalTrainingConfig
-    from passive_walker.bc.train import train_temporal_jax
+    from passive_walker.bc.training.train import train_temporal_jax
     
     with tempfile.TemporaryDirectory() as temp_dir:
         data_dir = os.path.join(temp_dir, "data")
@@ -447,7 +447,7 @@ test_section("Temporal Loss Function")
 def test_temporal_loss_computation():
     """Test temporal loss with masking."""
     import torch
-    from passive_walker.bc.train import compute_temporal_loss
+    from passive_walker.bc.training.train import compute_temporal_loss
     
     pred = torch.randn(4, 10, 3)  # (batch, seq_len, action_dim)
     target = torch.randn(4, 10, 3)
@@ -466,7 +466,7 @@ run_test("Temporal loss computation", test_temporal_loss_computation)
 def test_temporal_loss_with_masking():
     """Test temporal loss properly handles masking."""
     import torch
-    from passive_walker.bc.train import compute_temporal_loss
+    from passive_walker.bc.training.train import compute_temporal_loss
     
     pred = torch.randn(2, 10, 3)
     target = torch.randn(2, 10, 3)

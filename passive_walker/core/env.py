@@ -29,7 +29,9 @@ DEFAULT_GUI = True      # Enable GUI when run as module
 CAM_DISTANCE = 8.0      # Camera distance from walker
 
 # Observation and action dimensions
-_OBS_DIM = 11  # [x, z, pitch, ẋ, ż, hip, lk, rk, hiṗ, lk̇, rk̇]
+_OBS_DIM = 17  # [x, z, pitch, ẋ, ż, hip, lk, rk, hiṗ, lk̇, rk̇, lc, rc, lf, rf, lcd, rcd]
+# Original 11D: [x, z, pitch, ẋ, ż, hip, lk, rk, hiṗ, lk̇, rk̇]
+# Contact 6D: [left_contact, right_contact, left_force, right_force, left_contact_duration, right_contact_duration]
 _ACT_DIM = 3   # [hip, left_knee, right_knee] - knee sliders (m)
 
 
@@ -132,6 +134,12 @@ class PassiveWalkerEnv(gym.Env):
         self._qdes = np.zeros(3, dtype=np.float32)
         self._u = np.empty(3, dtype=np.float32)
         
+        # Contact information tracking
+        self._left_contact_duration = 0.0
+        self._right_contact_duration = 0.0
+        self._prev_left_contact = False
+        self._prev_right_contact = False
+        self._contact_threshold = 0.1  # Force threshold for contact detection
 
         self.prev_x = 0.0
         self._t_next = 0.0  # Target time for next control step
@@ -259,6 +267,12 @@ class PassiveWalkerEnv(gym.Env):
         
         # Initialize control change tracking for smooth motion penalty
         self._prev_u = np.zeros(3, dtype=np.float32)
+        
+        # Reset contact tracking
+        self._left_contact_duration = 0.0
+        self._right_contact_duration = 0.0
+        self._prev_left_contact = False
+        self._prev_right_contact = False
 
         return self._get_obs(), {}
 
@@ -281,7 +295,89 @@ class PassiveWalkerEnv(gym.Env):
         ob[10] = qvel[self.qvel_rk]   # right knee slider velocity (m/s)
         
         
+        # Contact information (6 additional dimensions)
+        contact_info = self._compute_foot_contacts()
+        ob[11] = contact_info['left_contact']      # Binary contact flag
+        ob[12] = contact_info['right_contact']      # Binary contact flag
+        ob[13] = contact_info['left_force']         # Normalized contact force
+        ob[14] = contact_info['right_force']        # Normalized contact force
+        ob[15] = contact_info['left_contact_duration']   # Time since contact switch
+        ob[16] = contact_info['right_contact_duration']  # Time since contact switch
+        
         return ob
+
+    def _compute_foot_contacts(self) -> dict:
+        """
+        Compute foot contact information from MuJoCo contact data.
+        
+        Returns:
+            Dictionary with contact flags, forces, and durations
+        """
+        dt = self.model.opt.timestep
+        
+        # Get contact forces for both feet
+        left_force = self._get_contact_force(self.b_lfoot)
+        right_force = self._get_contact_force(self.b_rfoot)
+        
+        # Determine contact state based on force threshold
+        left_contact = left_force > self._contact_threshold
+        right_contact = right_force > self._contact_threshold
+        
+        # Update contact durations
+        if left_contact == self._prev_left_contact:
+            self._left_contact_duration += dt
+        else:
+            self._left_contact_duration = 0.0
+            self._prev_left_contact = left_contact
+            
+        if right_contact == self._prev_right_contact:
+            self._right_contact_duration += dt
+        else:
+            self._right_contact_duration = 0.0
+            self._prev_right_contact = right_contact
+        
+        return {
+            'left_contact': float(left_contact),
+            'right_contact': float(right_contact),
+            'left_force': left_force / 100.0,  # Normalize to reasonable range
+            'right_force': right_force / 100.0,  # Normalize to reasonable range
+            'left_contact_duration': self._left_contact_duration,
+            'right_contact_duration': self._right_contact_duration
+        }
+    
+    def _get_contact_force(self, body_id: int) -> float:
+        """
+        Get contact force magnitude for a specific body.
+        
+        Args:
+            body_id: MuJoCo body ID
+            
+        Returns:
+            Contact force magnitude (N)
+        """
+        force_magnitude = 0.0
+        
+        # Get all geoms belonging to this body
+        body_geoms = []
+        for geom_id in range(self.model.ngeom):
+            if self.model.geom_bodyid[geom_id] == body_id:
+                body_geoms.append(geom_id)
+        
+        # Iterate through all contacts
+        for i in range(self.data.ncon):
+            contact = self.data.contact[i]
+            
+            # Check if this contact involves any geom of the specified body
+            if contact.geom1 in body_geoms or contact.geom2 in body_geoms:
+                # Get contact force
+                force = np.zeros(6)
+                mujoco.mj_contactForce(self.model, self.data, i, force)
+                
+                # Use normal force (z-component) as contact force
+                normal_force = abs(force[2])
+                force_magnitude += normal_force
+        
+        return force_magnitude
 
     def step(self, action: np.ndarray):
         """Advance simulation by one control step."""

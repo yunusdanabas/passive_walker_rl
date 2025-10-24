@@ -12,7 +12,7 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional, Union
 import torch
 from torch.utils.data import Dataset, DataLoader
-from .utils import Normalizer
+from passive_walker.bc.utils import Normalizer
 
 # Joint ranges for normalization (matching controller.py)
 JOINT_MIN = np.array([-0.5, -0.5, -0.5], dtype=np.float32)
