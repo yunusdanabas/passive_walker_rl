@@ -22,7 +22,7 @@ from ..core.environment_enhancements import (
     OnlinePerturbationManager, AdaptiveRandomizationManager, RewardCurriculumManager
 )
 from ..core.randomization import get_randomization_config
-from ..bc.tracking import ExperimentTracker
+from ..bc.experiment.tracking import ExperimentTracker
 
 
 class EnhancedPPOTrainer(PPOTrainer):
@@ -37,7 +37,8 @@ class EnhancedPPOTrainer(PPOTrainer):
                  model: nn.Module,
                  config: PPOConfig,
                  device: str = "cpu",
-                 tracker: Optional[ExperimentTracker] = None):
+                 tracker: Optional[ExperimentTracker] = None,
+                 output_dir: str = "ppo_runs"):
         """
         Initialize enhanced PPO trainer.
         
@@ -46,8 +47,9 @@ class EnhancedPPOTrainer(PPOTrainer):
             config: PPO configuration
             device: Device to train on
             tracker: Experiment tracker for logging
+            output_dir: Directory to save outputs
         """
-        super().__init__(model, config, device, tracker)
+        super().__init__(model, config, device, tracker, output_dir)
         
         # Environment enhancement components
         self.perturbation_manager = None

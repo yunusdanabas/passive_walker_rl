@@ -86,9 +86,6 @@ def main():
             config = defaults[args.config]
             config.experiment_name = args.experiment_name
             config.total_timesteps = args.timesteps
-            config.seed = args.seed
-            config.device = args.device
-            config.output_dir = args.out
             config.use_curriculum = args.use_curriculum
             config.use_domain_randomization = args.use_domain_randomization
             config.randomization_profile = args.randomization_profile
@@ -111,9 +108,6 @@ def main():
             n_steps=args.n_steps,
             batch_size=args.batch_size,
             n_epochs=args.n_epochs,
-            seed=args.seed,
-            device=args.device,
-            output_dir=args.out,
             use_curriculum=args.use_curriculum,
             use_domain_randomization=args.use_domain_randomization,
             randomization_profile=args.randomization_profile,
@@ -124,15 +118,15 @@ def main():
     print(f"Starting PPO training: {config.experiment_name}")
     print(f"Model: {config.model_type}")
     print(f"Timesteps: {config.total_timesteps}")
-    print(f"Device: {config.device}")
+    print(f"Device: {args.device}")
     print(f"Curriculum: {config.use_curriculum}")
     print(f"Domain randomization: {config.use_domain_randomization}")
     
     # Set random seed
     import torch
     import numpy as np
-    torch.manual_seed(config.seed)
-    np.random.seed(config.seed)
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
     
     # Create model
     if config.model_type == "mlp":
@@ -152,11 +146,11 @@ def main():
         )
     
     # Create experiment tracker
-    tracker = ExperimentTracker(config.output_dir, config.experiment_name)
+    tracker = ExperimentTracker(args.out, config.experiment_name)
     tracker.set_hyperparameters(config.to_dict())
     
     # Create enhanced trainer
-    trainer = EnhancedPPOTrainer(model, config, device=config.device, tracker=tracker)
+    trainer = EnhancedPPOTrainer(model, config, device=args.device, tracker=tracker, output_dir=args.out)
     
     # Train
     try:
