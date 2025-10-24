@@ -10,12 +10,12 @@ import argparse
 import sys
 import os
 import numpy as np
-from .utils import (
+from passive_walker.bc.utils import (
     set_seed, set_global_seed, pick_device, ensure_dir, save_checkpoint, MetricsWriter, Normalizer,
     ckpt_name_for, meta_name_for, metrics_name_for, save_metrics_json
 )
-from .dataset import discover_npzs, split_by_episode, load_xy, create_data_loader, create_sequence_loader_from_files
-from .augmentation import create_default_temporal_augmentation, create_light_temporal_augmentation, create_heavy_temporal_augmentation
+from passive_walker.bc.data.dataset import discover_npzs, split_by_episode, load_xy, create_data_loader, create_sequence_loader_from_files
+from passive_walker.bc.data.augmentation import create_default_temporal_augmentation, create_light_temporal_augmentation, create_heavy_temporal_augmentation
 
 
 def compute_advanced_loss(pred, target, w1=1.0, w2=0.0, w3=0.1, w4=0.01):
@@ -65,7 +65,7 @@ def train_torch(args):
     import torch
     import torch.nn as nn
     import torch.optim as optim
-    from .models.models_torch import TorchMLP, TorchMLPLarge
+    from passive_walker.bc.models.models_torch import TorchMLP, TorchMLPLarge
 
     # Setup device and data
     device = pick_device(args.gpu)
@@ -260,7 +260,7 @@ def train_jax(args):
     import jax.numpy as jnp
     import equinox as eqx
     import optax
-    from .models.models_jax import make_model, save_eqx
+    from passive_walker.bc.models.models_jax import make_model, save_eqx
     
     # Section to output dimension mapping
     SECTION_TO_OUTDIM = {"hip": 1, "knees": 2, "both": 3, "both-adv": 3}
@@ -510,7 +510,7 @@ def train_temporal_torch(config):
     import torch
     import torch.nn as nn
     import torch.optim as optim
-    from .models.temporal_torch import create_temporal_model
+    from passive_walker.bc.models.temporal_torch import create_temporal_model
     
     # Setup device and data
     device = pick_device(config.gpu if hasattr(config, 'gpu') else False)
@@ -720,7 +720,7 @@ def train_temporal_torch(config):
             }
             
             # Create a dummy normalizer for checkpoint saving
-            from .utils import Normalizer
+            from passive_walker.bc.utils import Normalizer
             dummy_normalizer = Normalizer(mean=np.zeros(input_dim), std=np.ones(input_dim))
             
             checkpoint_path, meta_path = save_checkpoint(
@@ -748,7 +748,7 @@ def train_temporal_jax(config):
     import jax.numpy as jnp
     import equinox as eqx
     import optax
-    from .models.temporal_jax import make_temporal_model
+    from passive_walker.bc.models.temporal_jax import make_temporal_model
     
     set_global_seed(config.seed)
     

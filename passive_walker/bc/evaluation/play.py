@@ -13,7 +13,7 @@ import json
 import time
 import numpy as np
 from passive_walker.core.env import PassiveWalkerEnv
-from .utils import set_seed, Normalizer
+from passive_walker.bc.utils import set_seed, Normalizer
 
 # Joint ranges for denormalization (matching controller.py and dataset.py)
 JOINT_MIN = np.array([-0.5, -0.5, -0.5], dtype=np.float32)
@@ -116,8 +116,8 @@ def play_torch(ckpt_path: str, meta_path: str, episodes: int, seconds: float, se
         headless: If True, disable GUI
     """
     import torch
-    from .models.models_torch import TorchMLP, TorchMLPLarge
-    from .utils import load_checkpoint
+    from passive_walker.bc.models.models_torch import TorchMLP, TorchMLPLarge
+    from passive_walker.bc.utils import load_checkpoint
     from passive_walker.core.controller import FSMStateMachine
 
     # Load metadata
@@ -283,7 +283,7 @@ def play_jax(ckpt_path: str, meta_path: str, episodes: int, seconds: float, seed
     import jax
     import jax.numpy as jnp
     import equinox as eqx
-    from .models.models_jax import make_model, load_eqx
+    from passive_walker.bc.models.models_jax import make_model, load_eqx
     from passive_walker.core.controller import FSMStateMachine
 
     # Load metadata

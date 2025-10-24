@@ -10,6 +10,7 @@ import time
 import argparse
 import numpy as np
 from passive_walker.core.env import PassiveWalkerEnv
+from passive_walker.core.perturbations import create_perturbation_manager
 
 # =============================================================================
 # Configuration
@@ -209,7 +210,7 @@ def _create_quality_report(episode_lengths, episode_gait_cycles, episode_distanc
 # Main Collection Functions
 # =============================================================================
 
-def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, mode="fsm", obs_noise=0.0, randomization_profile=None):
+def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, mode="fsm", obs_noise=0.0, randomization_profile=None, perturbation_mode="none", perturbation_strength=1.0, perturbation_freq=0.5):
     """Collect FSM episodes with duration-based design and gait cycle validation."""
     # Setup
     os.makedirs(outdir, exist_ok=True)
@@ -234,6 +235,15 @@ def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, m
         randomize_physics=physics["randomize"],
         randomization_profile=randomization_profile
     )
+    
+    # Initialize perturbation manager
+    perturbation_manager = create_perturbation_manager(
+        mode=perturbation_mode,
+        strength=perturbation_strength
+    )
+    
+    if perturbation_mode != "none":
+        print(f"Perturbation mode: {perturbation_mode}, strength: {perturbation_strength}, freq: {perturbation_freq} Hz")
     
     # Calculate steps based on environment control rate
     steps = int(round(duration_sec * env.ctrl_hz))
@@ -260,10 +270,14 @@ def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, m
         # Reset with deterministic seed
         ep_seed = None if seed is None else (int(seed) + ep)
         obs, _ = env.reset(seed=ep_seed)
+        
+        # Reset perturbation manager for new episode
+        if perturbation_mode != "none":
+            perturbation_manager.reset()
 
         # Pre-allocate episode buffers
         T = int(steps)
-        obs_buf = np.empty((T + 1, 11), dtype=np.float32)
+        obs_buf = np.empty((T + 1, 17), dtype=np.float32)  # Updated for 17D observations
         obs_buf[0] = obs
         act_buf = np.zeros((T, 3), dtype=np.float32)
         rew_buf = np.empty((T,), dtype=np.float32)
@@ -272,6 +286,10 @@ def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, m
         itorso = np.empty((T,), dtype=np.float32)
         idx = np.empty((T,), dtype=np.float32)
         qdes_buf = np.empty((T, 3), dtype=np.float32)
+        
+        # Perturbation tracking arrays
+        perturbation_applied = np.zeros((T,), dtype=np.bool_)
+        perturbation_type = np.zeros((T,), dtype=np.int32)
         
         # FSM states and control effort for QA
         fsm_hip_arr = np.empty((T,), dtype=np.int32)
@@ -292,6 +310,14 @@ def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, m
         t_used = 0
 
         for t in range(T):
+            # Apply perturbations if enabled
+            if perturbation_mode != "none":
+                perturbation_info = perturbation_manager.update(env, env.data.time)
+                if perturbation_info['perturbations_applied']:
+                    perturbation_applied[t] = True
+                    # Store perturbation type (simplified: 1 for any perturbation)
+                    perturbation_type[t] = 1
+            
             # Get FSM joint targets and step environment
             if env.mode == "fsm":
                 # In FSM mode the env ignores the action; send zeros for clarity/speed
@@ -383,6 +409,11 @@ def collect(episodes, duration_sec, outdir, seed=None, physics_condition=None, m
             **({} if ep_seed is None else {"seed": np.int64(ep_seed)}),
         )
         
+        # Add perturbation data if enabled
+        if perturbation_mode != "none":
+            payload["info_perturbations"] = perturbation_applied[:t_used]
+            payload["info_perturbation_type"] = perturbation_type[:t_used]
+        
         # Add realized physics for audit trail
         if physics["randomize"]:
             payload["torso_mass"] = float(env.model.body_mass[env.b_torso])
@@ -467,7 +498,7 @@ def collect_physics_sweep(episodes_per_condition, duration_sec, base_outdir, see
         condition_dir = os.path.join(base_outdir, dirname)
         
         # Collect data for this condition
-        collect(episodes_per_condition, duration_sec, condition_dir, seed, condition, mode, obs_noise, randomization_profile)
+        collect(episodes_per_condition, duration_sec, condition_dir, seed, condition, mode, obs_noise, randomization_profile, "none", 1.0, 0.5)
         
         print(f"Completed {condition}: {episodes_per_condition} episodes in {condition_dir}")
     
@@ -507,6 +538,13 @@ def main():
                         help="Observation noise level (0.0=no noise, 1.0=full noise)")
     parser.add_argument("--randomization-profile", type=str, choices=["none", "basic", "moderate", "aggressive", "temporal"],
                         help="Advanced randomization profile for data collection")
+    parser.add_argument("--perturbation-mode", type=str, default="none", 
+                        choices=["none", "random", "scheduled", "curriculum"],
+                        help="Perturbation mode: none, random, scheduled, or curriculum")
+    parser.add_argument("--perturbation-strength", type=float, default=1.0,
+                        help="Perturbation strength multiplier (0.0 to 1.0)")
+    parser.add_argument("--perturbation-freq", type=float, default=0.5,
+                        help="Perturbation frequency in Hz")
     args = parser.parse_args()
     
     # Use preset if specified, otherwise use duration argument
@@ -525,7 +563,7 @@ def main():
         if args.obs_noise > 0:
             print(f"Observation noise: {args.obs_noise:.2f}")
         
-        collect(args.episodes, duration, args.out, args.seed, args.physics, args.mode, args.obs_noise, args.randomization_profile)
+        collect(args.episodes, duration, args.out, args.seed, args.physics, args.mode, args.obs_noise, args.randomization_profile, args.perturbation_mode, args.perturbation_strength, args.perturbation_freq)
 
 
 if __name__ == "__main__":

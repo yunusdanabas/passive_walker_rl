@@ -20,8 +20,8 @@ import time
 from pathlib import Path
 
 # Import existing BC functions
-from .utils import set_seed, ensure_dir
-from .dataset import discover_npzs
+from passive_walker.bc.utils import set_seed, ensure_dir
+from passive_walker.bc.data.dataset import discover_npzs
 
 
 def load_config(config_path: str, preset: str = None) -> dict:

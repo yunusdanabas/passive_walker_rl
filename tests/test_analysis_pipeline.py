@@ -18,8 +18,8 @@ print("\n1️⃣  Testing imports...")
 try:
     from passive_walker.core.env import PassiveWalkerEnv
     from passive_walker.bc.models.models_torch import TorchMLP, TorchMLPLarge
-    from passive_walker.bc.dataset import Normalizer
-    from passive_walker.bc.play import _assemble_action_torch
+    from passive_walker.bc.utils import Normalizer
+    from passive_walker.bc.evaluation.play import _assemble_action_torch
     print("   ✅ All imports successful")
 except Exception as e:
     print(f"   ❌ Import failed: {e}")

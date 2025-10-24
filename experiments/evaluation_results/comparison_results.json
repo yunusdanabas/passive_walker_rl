@@ -1,0 +1,86 @@
+{
+  "policies": [
+    "ppo_dummy",
+    "fsm_baseline"
+  ],
+  "overall_comparison": {
+    "ppo_dummy": {
+      "mean_return": 328.2225209091426,
+      "std_return": 149.61612303351757,
+      "mean_length": 2034.0,
+      "std_length": 932.0,
+      "mean_success_rate": 1.0,
+      "std_success_rate": 0.0
+    },
+    "fsm_baseline": {
+      "mean_return": 328.24738315519505,
+      "std_return": 149.62928252440287,
+      "mean_length": 2034.0,
+      "std_length": 932.0,
+      "mean_success_rate": 1.0,
+      "std_success_rate": 0.0
+    }
+  },
+  "condition_comparison": {
+    "baseline": {
+      "ppo_dummy": {
+        "mean_return": 403.4330558276924,
+        "std_return": 0.0,
+        "success_rate": 1.0
+      },
+      "fsm_baseline": {
+        "mean_return": 403.4330558276924,
+        "std_return": 0.0,
+        "success_rate": 1.0
+      }
+    },
+    "steep": {
+      "ppo_dummy": {
+        "mean_return": 28.997623452295308,
+        "std_return": 0.0,
+        "success_rate": 1.0
+      },
+      "fsm_baseline": {
+        "mean_return": 28.997623452295308,
+        "std_return": 0.0,
+        "success_rate": 1.0
+      }
+    },
+    "slippery": {
+      "ppo_dummy": {
+        "mean_return": 403.43271538801133,
+        "std_return": 5.684341886080802e-14,
+        "success_rate": 1.0
+      },
+      "fsm_baseline": {
+        "mean_return": 403.43271538801133,
+        "std_return": 5.684341886080802e-14,
+        "success_rate": 1.0
+      }
+    },
+    "rough": {
+      "ppo_dummy": {
+        "mean_return": 401.71784621686265,
+        "std_return": 0.0,
+        "success_rate": 1.0
+      },
+      "fsm_baseline": {
+        "mean_return": 401.71784621686265,
+        "std_return": 0.0,
+        "success_rate": 1.0
+      }
+    },
+    "randomized": {
+      "ppo_dummy": {
+        "mean_return": 403.53136366085147,
+        "std_return": 1.7887271646973681,
+        "success_rate": 1.0
+      },
+      "fsm_baseline": {
+        "mean_return": 403.6556748911139,
+        "std_return": 2.037964277037362,
+        "success_rate": 1.0
+      }
+    }
+  }
+}
