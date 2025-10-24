@@ -18,7 +18,7 @@ import os
 from .models import create_actor_critic, load_bc_weights
 from .config import PPOConfig
 from .buffer import RolloutBuffer, VectorizedRolloutBuffer
-from ..bc.tracking import ExperimentTracker
+from ..bc.experiment.tracking import ExperimentTracker
 
 
 class PPOTrainer:
@@ -32,7 +32,8 @@ class PPOTrainer:
                  model: nn.Module,
                  config: PPOConfig,
                  device: str = "cpu",
-                 tracker: Optional[ExperimentTracker] = None):
+                 tracker: Optional[ExperimentTracker] = None,
+                 output_dir: str = "ppo_runs"):
         """
         Initialize PPO trainer.
         
@@ -41,11 +42,14 @@ class PPOTrainer:
             config: PPO configuration
             device: Device to train on
             tracker: Experiment tracker for logging
+            output_dir: Directory to save outputs
         """
         self.model = model.to(device)
         self.config = config
         self.device = device
         self.tracker = tracker
+        self.output_dir = output_dir
+        self.run_dir = None  # Will be set when saving
         
         # Optimizer
         self.optimizer = optim.Adam(
@@ -476,13 +480,17 @@ class PPOTrainer:
     
     def save_model(self, filename: str = "model.pth"):
         """Save model checkpoint."""
-        if not hasattr(self, 'run_dir') or not self.run_dir:
-            # Create default run directory
-            import os
-            from datetime import datetime
-            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            self.run_dir = os.path.join(self.config.output_dir, f"{self.config.experiment_name}_{timestamp}")
-            os.makedirs(self.run_dir, exist_ok=True)
+        import os
+        from datetime import datetime
+        
+        if not self.run_dir:
+            # Use tracker's log dir if available, otherwise create one
+            if self.tracker and hasattr(self.tracker, 'log_dir'):
+                self.run_dir = self.tracker.log_dir
+            else:
+                timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+                self.run_dir = os.path.join(self.output_dir, f"{self.config.experiment_name}_{timestamp}")
+                os.makedirs(self.run_dir, exist_ok=True)
         
         path = os.path.join(self.run_dir, filename)
         
