@@ -15,6 +15,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from passive_walker.ppo.models import create_actor_critic
 from passive_walker.ppo.config import PPOConfig
 from passive_walker.ppo.evaluate import PolicyEvaluator, PolicyVisualizer
+from passive_walker.config.paths import METRICS_DIR, PLOTS_DIR, PPO_PLOTS_DIR, ensure_dir_exists
+from passive_walker.config.paths_redirect import redirect_legacy_dir
 from passive_walker.bc.models.models_torch import TorchMLP
 import torch
 import json
@@ -29,8 +31,8 @@ def main():
                        help="Number of episodes per evaluation")
     parser.add_argument("--deterministic", action="store_true",
                        help="Use deterministic actions")
-    parser.add_argument("--out", type=str, default="evaluation_results",
-                       help="Output directory")
+    parser.add_argument("--out", type=str, default=str(METRICS_DIR / "ppo"),
+                       help="Output directory for metrics/plots")
     
     # Policy arguments
     parser.add_argument("--ppo_model", type=str, default=None,
@@ -60,6 +62,10 @@ def main():
         deterministic=args.deterministic
     )
     
+    # Redirect and ensure output dir
+    args.out = str(redirect_legacy_dir(args.out))
+    ensure_dir_exists(args.out)
+
     # Create visualizer
     visualizer = PolicyVisualizer(save_dir=args.out)
     
@@ -162,7 +168,7 @@ def main():
             print(f"Plots saved to: {args.out}/")
     
     # Save individual results
-    os.makedirs(args.out, exist_ok=True)
+    ensure_dir_exists(args.out)
     evaluator.save_results(os.path.join(args.out, "evaluation_results.json"))
     print(f"Evaluation results saved to: {args.out}/evaluation_results.json")
     

@@ -18,7 +18,7 @@ import os
 from .models import create_actor_critic, load_bc_weights
 from .config import PPOConfig
 from .buffer import RolloutBuffer, VectorizedRolloutBuffer
-from ..bc.experiment.tracking import ExperimentTracker
+from passive_walker.config.paths import PPO_MODELS_DIR, PPO_RUNS_DIR, ensure_dir_exists
 
 
 class PPOTrainer:
@@ -32,7 +32,7 @@ class PPOTrainer:
                  model: nn.Module,
                  config: PPOConfig,
                  device: str = "cpu",
-                 tracker: Optional[ExperimentTracker] = None,
+                 tracker: Optional[Any] = None,
                  output_dir: str = "ppo_runs"):
         """
         Initialize PPO trainer.
@@ -49,7 +49,17 @@ class PPOTrainer:
         self.device = device
         self.tracker = tracker
         self.output_dir = output_dir
-        self.run_dir = None  # Will be set when saving
+        self.run_dir = None  # Will be set when saving/logging
+        # Centralized directories
+        self.models_dir = os.path.join(str(PPO_MODELS_DIR), config.experiment_name)
+        ensure_dir_exists(self.models_dir)
+        # Prefer tracker log_dir, otherwise centralized runs dir
+        if tracker and hasattr(tracker, 'log_dir'):
+            self.run_dir = tracker.log_dir
+        else:
+            base_run_dir = os.path.join(str(PPO_RUNS_DIR), config.experiment_name)
+            ensure_dir_exists(base_run_dir)
+            self.run_dir = base_run_dir
         
         # Optimizer
         self.optimizer = optim.Adam(
@@ -262,10 +272,19 @@ class PPOTrainer:
                 loss_dict["total_loss"].backward()
                 
                 # Gradient clipping
-                torch.nn.utils.clip_grad_norm_(
+                grad_norm = torch.nn.utils.clip_grad_norm_(
                     self.model.parameters(),
                     self.config.max_grad_norm
                 )
+                
+                # Add gradient norm logging every 1000 steps
+                if self.timestep % 1000 == 0:
+                    print(f"  Gradient norm: {grad_norm:.4f}")
+                    
+                    # Verify learning rate is non-zero
+                    lr = self.optimizer.param_groups[0]['lr']
+                    if lr < 1e-8:
+                        print(f"  WARNING: Learning rate very low: {lr}")
                 
                 self.optimizer.step()
                 
@@ -483,16 +502,9 @@ class PPOTrainer:
         import os
         from datetime import datetime
         
-        if not self.run_dir:
-            # Use tracker's log dir if available, otherwise create one
-            if self.tracker and hasattr(self.tracker, 'log_dir'):
-                self.run_dir = self.tracker.log_dir
-            else:
-                timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-                self.run_dir = os.path.join(self.output_dir, f"{self.config.experiment_name}_{timestamp}")
-                os.makedirs(self.run_dir, exist_ok=True)
-        
-        path = os.path.join(self.run_dir, filename)
+        # Always save models under centralized models directory
+        ensure_dir_exists(self.models_dir)
+        path = os.path.join(self.models_dir, filename)
         
         checkpoint = {
             "model_state_dict": self.model.state_dict(),
@@ -501,7 +513,12 @@ class PPOTrainer:
             "timestep": self.timestep,
             "episode": self.episode,
             "best_eval_return": self.best_eval_return,
-            "config": self.config.to_dict()
+            "config": {
+                **self.config.to_dict(),
+                'env_mode': 'research',  # Add environment mode
+                'obs_dim': 17,
+                'action_dim': 3,
+            }
         }
         
         os.makedirs(os.path.dirname(path), exist_ok=True)

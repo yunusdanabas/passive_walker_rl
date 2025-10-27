@@ -37,7 +37,6 @@ from passive_walker.bc.utils import (
 # from passive_walker.bc.training import train_torch, train_jax
 # from passive_walker.bc.data import SequenceDataset, discover_npzs
 # from passive_walker.bc.evaluation import ComprehensiveEvaluator
-# from passive_walker.bc.experiment import ExperimentTracker
 # etc.
 
 __all__ = [

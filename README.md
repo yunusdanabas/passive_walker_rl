@@ -6,72 +6,87 @@ A comprehensive reinforcement learning project for training a passive walker usi
 
 ```
 passive_walker_rl/
-├── passive_walker/          # Main package
-│   ├── core/               # Core environment and physics
-│   ├── bc/                 # Behavior Cloning implementation
-│   ├── fsm/                # Finite State Machine controller
-│   └── ppo/                # PPO implementation
-├── experiments/             # All experimental work
-│   ├── models/             # Trained model checkpoints
-│   ├── data/               # Training datasets
-│   ├── results/            # Experiment results
-│   └── outputs/            # Evaluation outputs
-│       ├── plots/          # Evaluation plots
-│       ├── reports/        # Evaluation reports
-│       └── metrics/        # Evaluation metrics
-├── tools/                  # Analysis and utility tools
-│   ├── evaluation/         # Model evaluation scripts
-│   ├── analysis/          # Analysis tools
-│   └── visualization/     # Plotting and visualization
-├── docs/                   # Documentation
-│   ├── reports/           # Analysis reports
-│   ├── guides/            # User guides
-│   └── api/               # API documentation
-├── tests/                  # Unit tests
-├── config/                 # Configuration files
-├── scripts/                # Utility scripts
-└── _legacy/                # Legacy code
+├── passive_walker/         # Main package
+│   ├── core/              # Core environment and physics
+│   ├── bc/                # Behavior Cloning
+│   │   ├── models/        # Model architectures
+│   │   ├── training/      # Training scripts
+│   │   ├── evaluation/    # Evaluation and play scripts
+│   │   └── data/          # Data loading and augmentation
+│   ├── fsm/               # Finite State Machine controller
+│   └── ppo/               # PPO implementation
+├── experiments/            # Unified experiment outputs
+│   ├── models/            # ALL trained models
+│   │   ├── bc/            # BC models
+│   │   └── ppo/           # PPO models
+│   ├── data/              # Training datasets
+│   │   └── fsm_demos/     # FSM demonstrations
+│   └── runs/               # Training logs
+│       ├── bc/            # BC training logs
+│       └── ppo/           # PPO training logs
+│   └── analysis/          # Unified analysis outputs
+│       ├── metrics/       # Evaluation metrics (JSON)
+│       ├── plots/         # Visualizations (bc/ppo)
+│       └── reports/       # Reports (md/html)
+├── tools/                  # Simple utility scripts
+│   ├── evaluate_model.py  # Universal model evaluation
+│   ├── compare_models.py  # Model comparison
+│   └── visualize_results.py # Plotting tools
+├── docs/                   # Essential documentation
+│   ├── README.md          # Project overview
+│   ├── SETUP.md           # Installation guide
+│   ├── TRAINING.md        # Training guide
+│   ├── API.md             # API reference
+│   └── CHANGELOG.md       # Project history
+├── tests/                  # Core tests (~6 files)
+├── scripts/                # Simple training scripts
+│   ├── train_bc.sh        # Train BC model
+│   ├── train_ppo.sh       # Train PPO model
+│   ├── collect_data.sh    # Collect FSM data
+│   └── check_training_progress.sh
+└── _archive/               # Archived code (reference only)
+    ├── legacy/             # Original legacy code
+    ├── bc/                 # Archived BC features
+    ├── ppo/                # Archived PPO trainers
+    ├── tools/              # Archived complex tools
+    ├── tests/              # Archived tests
+    └── scripts/            # Archived scripts
 ```
 
 ## Quick Start
 
-### 1. Environment Setup
+### 1. Setup Environment
 ```bash
 mamba activate main
 cd /home/yunusdanabas/passive_walker_rl
+pip install -e .
 ```
 
-### 2. Run Environment
+### 2. Collect FSM Demonstrations
 ```bash
-# Basic FSM mode
-python -m passive_walker.core.env --mode fsm --gui
-
-# With enhanced features
-python -m passive_walker.core.env --mode fsm --gui --ramp-jitter 2.0 --ctrl-hz 150
+./scripts/collect_data.sh 10 20 experiments/data/fsm_demos
 ```
 
-### 3. Collect Data
+### 3. Train BC Model
 ```bash
-# Basic collection
-python -m passive_walker.fsm.collect --episodes 10 --duration 20 --out data/demos
-
-# With observation noise
-python -m passive_walker.fsm.collect --episodes 10 --duration 20 --obs-noise 0.5 --out data/noisy_demos
+./scripts/train_bc.sh experiments/data/fsm_demos bc_v1 100
 ```
 
-### 4. Train Models
+### 4. Train PPO Model
 ```bash
-# Train BC model
-python -m passive_walker.bc.train --data data/demos --out checkpoints/my_model
+./scripts/train_ppo.sh
 ```
 
 ### 5. Evaluate Models
 ```bash
-# Comprehensive evaluation
-python evaluation_scripts/comprehensive_evaluation.py
+# Evaluate BC model
+python tools/evaluate_model.py experiments/models/bc/bc_v1.pt --type bc
 
-# Quick comparison
-python evaluation_scripts/evaluate_proper.py
+# Evaluate PPO model
+python tools/evaluate_model.py experiments/models/ppo/final_model.pth --type ppo
+
+# Migrate legacy outputs to unified structure (dry run)
+python tools/migrate_experiments.py --dry-run
 ```
 
 ## Key Features
@@ -106,22 +121,25 @@ python evaluation_scripts/evaluate_proper.py
 
 ## Documentation
 
-- **Checkpoints**: See `checkpoints/README.md`
-- **Evaluation**: See `evaluation_scripts/README.md`
-- **Commands**: See `COMMANDS.md`
-- **Analysis**: See `analysis/README.md`
+- [docs/README.md](docs/README.md) - Project overview and quick start
+- [docs/SETUP.md](docs/SETUP.md) - Installation and dependencies
+- [docs/TRAINING.md](docs/TRAINING.md) - BC and PPO training guides
+- [docs/API.md](docs/API.md) - Core API reference
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) - Project history
 
-## Status
+## Key Features
 
-✅ **Phase 1**: Data Quality & Environment Enhancement - Complete
-✅ **Phase 2**: Training Infrastructure & Reward Shaping - Complete  
-✅ **Phase 3**: Evaluation & Analysis - Complete
+- **FSM Controller**: Deterministic reference controller for data collection
+- **Behavior Cloning**: Neural networks trained to mimic FSM behavior
+- **PPO Training**: Simple and effective reinforcement learning
+- **Unified Structure**: All experiments in single `experiments/` directory
+- **Simple Tools**: Essential evaluation and comparison utilities
 
-**Ready for PPO transition with enhanced capabilities**
+## Development Status
 
-## Next Steps
+✅ **Completed**: Documentation consolidation (25+ → 5 files)  
+✅ **Completed**: Experiments unified (6+ locations → single `experiments/`)  
+✅ **Completed**: Code simplified (BC, PPO, tools, tests, scripts)  
+✅ **Completed**: Archive organized (`_legacy/` → `_archive/legacy/`)
 
-1. **PPO Training**: Use enhanced reward system and robustness features
-2. **Model Comparison**: Evaluate PPO vs BC performance
-3. **Robustness Testing**: Test on challenging physics conditions
-4. **Real-world Transfer**: Validate on physical hardware
+**Ready for training and development**

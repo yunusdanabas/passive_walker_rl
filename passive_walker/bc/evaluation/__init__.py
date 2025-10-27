@@ -7,7 +7,6 @@ from passive_walker.bc.evaluation.evaluate import (
     EvaluationResults
 )
 from passive_walker.bc.evaluation.play import play_policy
-from passive_walker.bc.evaluation.compare_architectures import compare_architectures
 
 __all__ = [
     "evaluate_model",
@@ -15,6 +14,5 @@ __all__ = [
     "ComprehensiveEvaluator",
     "EvaluationResults",
     "play_policy",
-    "compare_architectures",
 ]
 

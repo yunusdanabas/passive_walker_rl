@@ -51,14 +51,14 @@ class PPOConfig:
     randomization_profile: str = "moderate"  # "light", "moderate", "aggressive"
     
     # Evaluation configuration
-    eval_freq: int = 10000
+    eval_freq: int = 25000  # Evaluate every 25k steps (more frequent for better tracking)
     n_eval_episodes: int = 10
     eval_deterministic: bool = True
     
     # Logging configuration
     log_freq: int = 1000
     save_freq: int = 50000
-    log_dir: str = "experiments/ppo_logs"
+    log_dir: str = "experiments/runs/ppo"
     
     # BC initialization
     bc_model_path: Optional[str] = None
@@ -181,7 +181,7 @@ def create_default_configs() -> Dict[str, PPOConfig]:
         description="PPO initialized with BC model",
         model_type="mlp",
         hidden_sizes=[128, 128],
-        bc_model_path="experiments/bc_models/best_model.pth",
+        bc_model_path="experiments/models/bc/best_model.pth",
         bc_init_epochs=5,
         total_timesteps=1_000_000,
         n_envs=8
