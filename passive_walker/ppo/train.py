@@ -14,9 +14,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from passive_walker.ppo.models import create_actor_critic
 from passive_walker.ppo.config import PPOConfig, create_default_configs
-from passive_walker.ppo.enhanced_trainer import EnhancedPPOTrainer
+from passive_walker.ppo.trainer import PPOTrainer
 from passive_walker.core.env import PassiveWalkerEnv
-from passive_walker.bc.experiment.tracking import ExperimentTracker
+from passive_walker.config.paths import PPO_MODELS_DIR, PPO_RUNS_DIR, METRICS_DIR, ensure_dir_exists
+from passive_walker.config.paths_redirect import redirect_legacy_dir
 
 
 def main():
@@ -36,8 +37,9 @@ def main():
     parser.add_argument("--device", type=str, default="cpu",
                        choices=["cpu", "cuda"],
                        help="Device to train on")
-    parser.add_argument("--out", type=str, default="ppo_runs",
-                       help="Output directory")
+    # Deprecated --out retained for compatibility; redirected if used
+    parser.add_argument("--out", type=str, default=str(PPO_RUNS_DIR),
+                       help="Output directory (deprecated; use centralized runs dir)")
     
     # Model arguments
     parser.add_argument("--hidden_size", type=int, default=64,
@@ -67,8 +69,8 @@ def main():
                        help="Domain randomization profile")
     
     # Evaluation arguments
-    parser.add_argument("--eval_freq", type=int, default=10000,
-                       help="Evaluation frequency")
+    parser.add_argument("--eval_freq", type=int, default=0,
+                       help="Evaluation frequency (0 = auto: every 5%% of total timesteps)")
     parser.add_argument("--n_eval_episodes", type=int, default=10,
                        help="Number of evaluation episodes")
     
@@ -89,7 +91,11 @@ def main():
             config.use_curriculum = args.use_curriculum
             config.use_domain_randomization = args.use_domain_randomization
             config.randomization_profile = args.randomization_profile
-            config.eval_freq = args.eval_freq
+            # Set eval_freq: auto if 0, else use specified value
+            if args.eval_freq == 0:
+                config.eval_freq = max(args.timesteps // 20, 2048)  # Every 5% of total steps
+            else:
+                config.eval_freq = args.eval_freq
             config.n_eval_episodes = args.n_eval_episodes
         else:
             print(f"Unknown config: {args.config}")
@@ -97,6 +103,11 @@ def main():
             return
     else:
         # Create custom config
+        # Set eval_freq: auto if 0, else use specified value
+        eval_freq = args.eval_freq
+        if eval_freq == 0:
+            eval_freq = max(args.timesteps // 20, 2048)  # Every 5% of total steps
+        
         config = PPOConfig(
             experiment_name=args.experiment_name,
             model_type=args.model_type,
@@ -111,13 +122,14 @@ def main():
             use_curriculum=args.use_curriculum,
             use_domain_randomization=args.use_domain_randomization,
             randomization_profile=args.randomization_profile,
-            eval_freq=args.eval_freq,
+            eval_freq=eval_freq,
             n_eval_episodes=args.n_eval_episodes
         )
     
     print(f"Starting PPO training: {config.experiment_name}")
     print(f"Model: {config.model_type}")
     print(f"Timesteps: {config.total_timesteps}")
+    print(f"Eval frequency: {config.eval_freq}")
     print(f"Device: {args.device}")
     print(f"Curriculum: {config.use_curriculum}")
     print(f"Domain randomization: {config.use_domain_randomization}")
@@ -145,12 +157,12 @@ def main():
             num_layers=config.num_layers
         )
     
-    # Create experiment tracker
-    tracker = ExperimentTracker(args.out, config.experiment_name)
-    tracker.set_hyperparameters(config.to_dict())
-    
-    # Create enhanced trainer
-    trainer = EnhancedPPOTrainer(model, config, device=args.device, tracker=tracker, output_dir=args.out)
+    # Redirect legacy out path and ensure dir exists
+    out_dir = str(redirect_legacy_dir(args.out))
+    ensure_dir_exists(out_dir)
+
+    # Create trainer
+    trainer = PPOTrainer(model, config, device=args.device, output_dir=out_dir)
     
     # Train
     try:
@@ -171,7 +183,7 @@ def main():
         print(f"Model saved to: {trainer.run_dir}/interrupted_model.pth")
     
     finally:
-        tracker.close()
+        pass
 
 
 if __name__ == "__main__":

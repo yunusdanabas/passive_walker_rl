@@ -16,6 +16,8 @@ from passive_walker.bc.utils import (
 )
 from passive_walker.bc.data.dataset import discover_npzs, split_by_episode, load_xy, create_data_loader, create_sequence_loader_from_files
 from passive_walker.bc.data.augmentation import create_default_temporal_augmentation, create_light_temporal_augmentation, create_heavy_temporal_augmentation
+from passive_walker.config.paths import BC_MODELS_DIR
+from passive_walker.config.paths_redirect import redirect_legacy_dir
 
 
 def compute_advanced_loss(pred, target, w1=1.0, w2=0.0, w3=0.1, w4=0.01):
@@ -96,8 +98,8 @@ def train_torch(args):
     X_train_norm = normalizer.encode(X_train)
     X_val_norm = normalizer.encode(X_val)
 
-    # Create model (use larger architecture for better robustness)
-    input_dim = 11 * args.frame_stack
+    # Create model (use actual input dimension from data)
+    input_dim = X_train.shape[1]
     model = TorchMLPLarge(in_dim=input_dim, out_dim=y_train.shape[1], hidden=512, dropout=0.1).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
 
@@ -172,7 +174,7 @@ def train_torch(args):
 
             # Save best model
             meta = {
-                "input_dim": input_dim,
+                "input_dim": input_dim,  # Use actual input dim from data
                 "output_dim": y_train.shape[1],
                 "section": args.section,
                 "label_type": args.label_type,
@@ -994,7 +996,7 @@ def main():
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--seed", type=int, default=123)
     p.add_argument("--gpu", action="store_true")
-    p.add_argument("--save-dir", default=os.path.join(os.path.dirname(__file__), "checkpoints"))
+    p.add_argument("--save-dir", default=str(BC_MODELS_DIR))
     # Advanced loss weights for 'both-adv'
     p.add_argument("--w1", type=float, default=1.0)
     p.add_argument("--w2", type=float, default=0.0)
@@ -1002,6 +1004,9 @@ def main():
     p.add_argument("--w4", type=float, default=0.01)
     p.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack for temporal context")
     args = p.parse_args()
+
+    # Redirect legacy save dir if needed
+    args.save_dir = str(redirect_legacy_dir(args.save_dir))
 
     set_seed(args.seed)
 

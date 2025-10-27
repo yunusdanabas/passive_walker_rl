@@ -7,7 +7,7 @@ def test_reset_shapes_and_types():
     env = PassiveWalkerEnv(mode="fsm", use_gui=False)
     obs, _ = env.reset(seed=123)
     assert isinstance(obs, np.ndarray)
-    assert obs.shape == (11,)
+    assert obs.shape == (17,)
     env.close()
 
 def test_step_contract_and_info_keys():
@@ -16,7 +16,7 @@ def test_step_contract_and_info_keys():
     a = np.zeros(3, dtype=np.float32)
     obs2, r, done, info = env.step(a)
     # observation type/shape
-    assert isinstance(obs2, np.ndarray) and obs2.shape == (11,)
+    assert isinstance(obs2, np.ndarray) and obs2.shape == (17,)
     # reward scalar
     assert isinstance(r, float)
     # done bool
@@ -54,3 +54,29 @@ def test_env_longer_roll_no_crash():
         if done:
             break
     env.close()
+
+
+def test_observation_dtype_and_finite():
+    env = PassiveWalkerEnv(mode="fsm", use_gui=False)
+    obs, _ = env.reset(seed=123)
+    assert obs.shape == (17,)
+    assert obs.dtype in (np.float32, np.float64)
+    assert np.isfinite(obs).all()
+    a = np.zeros(3, dtype=np.float32)
+    obs2, r, done, info = env.step(a)
+    assert obs2.shape == (17,)
+    assert np.isfinite(obs2).all()
+    assert np.isfinite(r)
+    env.close()
+
+
+def test_observation_shape_consistent_across_modes():
+    # FSM mode
+    env_fsm = PassiveWalkerEnv(mode="fsm", use_gui=False)
+    obs_fsm, _ = env_fsm.reset(seed=1)
+    # Research mode
+    env_res = PassiveWalkerEnv(mode="research", use_gui=False)
+    obs_res, _ = env_res.reset(seed=1)
+    assert obs_fsm.shape == (17,)
+    assert obs_res.shape == (17,)
+    env_fsm.close(); env_res.close()

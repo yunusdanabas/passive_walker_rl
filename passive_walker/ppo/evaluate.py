@@ -12,6 +12,8 @@ from typing import Dict, Any, Optional, List, Tuple
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
+from passive_walker.config.paths import PPO_PLOTS_DIR, METRICS_DIR, ensure_dir_exists
+from passive_walker.config.paths_redirect import redirect_legacy_dir
 import json
 import time
 
@@ -128,6 +130,17 @@ class PolicyEvaluator:
         Returns:
             Dictionary of evaluation results
         """
+        # CRITICAL FIX: Remove FSM fallback - force error if policy is string
+        if isinstance(policy, str):
+            raise ValueError(f"Cannot evaluate with string policy: {policy}")
+        
+        # Validate policy has required method
+        if not hasattr(policy, 'get_action'):
+            raise ValueError(f"Policy {type(policy)} missing get_action method")
+        
+        # Log what we're evaluating
+        print(f"  Evaluating policy type: {type(policy).__name__}")
+        
         returns = []
         lengths = []
         success_count = 0
@@ -139,10 +152,7 @@ class PolicyEvaluator:
             
             while True:
                 # Get action from policy
-                if policy == "fsm":
-                    # FSM policy (actions ignored)
-                    action = np.zeros(env.action_space.shape[0])
-                elif hasattr(policy, 'get_action'):
+                if hasattr(policy, 'get_action'):
                     # PPO model
                     with torch.no_grad():
                         obs_tensor = torch.FloatTensor(obs).unsqueeze(0)
@@ -154,6 +164,11 @@ class PolicyEvaluator:
                             # MLP model
                             action, _, _ = action_output
                         action = action.squeeze(0).cpu().numpy()
+                        
+                        # Add action validation
+                        assert not np.isnan(action).any(), f"NaN in action: {action}"
+                        assert not np.isinf(action).any(), f"Inf in action: {action}"
+                        assert (np.abs(action) < 10).all(), f"Action out of range: {action}"
                 else:
                     # BC model
                     with torch.no_grad():
@@ -165,6 +180,11 @@ class PolicyEvaluator:
                             # MLP model
                             prediction = policy(obs_tensor)
                         action = prediction.squeeze(0).cpu().numpy()
+                        
+                        # Add action validation for BC models too
+                        assert not np.isnan(action).any(), f"NaN in action: {action}"
+                        assert not np.isinf(action).any(), f"Inf in action: {action}"
+                        assert (np.abs(action) < 10).all(), f"Action out of range: {action}"
                 
                 # Take action
                 obs, reward, done, info = env.step(action)
@@ -254,15 +274,16 @@ class PolicyVisualizer:
     Creates plots for policy comparison, learning curves, and performance analysis.
     """
     
-    def __init__(self, save_dir: str = "experiments/evaluation_plots"):
+    def __init__(self, save_dir: str = str(PPO_PLOTS_DIR)):
         """
         Initialize policy visualizer.
         
         Args:
             save_dir: Directory to save plots
         """
-        self.save_dir = Path(save_dir)
-        self.save_dir.mkdir(parents=True, exist_ok=True)
+        redirected = redirect_legacy_dir(save_dir)
+        self.save_dir = Path(redirected)
+        ensure_dir_exists(self.save_dir)
         
         # Set plotting style
         plt.style.use('seaborn-v0_8')
@@ -462,6 +483,6 @@ def create_policy_evaluator(**kwargs) -> PolicyEvaluator:
     return PolicyEvaluator(**kwargs)
 
 
-def create_policy_visualizer(save_dir: str = "experiments/evaluation_plots") -> PolicyVisualizer:
+def create_policy_visualizer(save_dir: str = str(PPO_PLOTS_DIR)) -> PolicyVisualizer:
     """Create policy visualizer with default settings."""
     return PolicyVisualizer(save_dir)

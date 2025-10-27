@@ -10,6 +10,9 @@ from typing import Optional, Dict, Any, List
 import os
 import json
 
+from passive_walker.config.paths import BC_MODELS_DIR, BC_RUNS_DIR, METRICS_DIR
+from passive_walker.config.paths_redirect import redirect_legacy_dir
+
 
 @dataclass
 class TrainingConfig:
@@ -42,7 +45,8 @@ class TrainingConfig:
     # Logging and checkpointing
     log_interval: int = 10
     save_interval: int = 50
-    checkpoint_dir: str = "experiments/models"
+    checkpoint_dir: str = str(BC_MODELS_DIR)
+    log_dir: str = str(BC_RUNS_DIR)
     
     # Validation parameters
     validate_every: int = 5
@@ -178,7 +182,7 @@ class TrainingConfig:
             dropout=getattr(args, 'dropout', 0.0),
             log_interval=getattr(args, 'log_interval', 10),
             save_interval=getattr(args, 'save_interval', 50),
-            checkpoint_dir=getattr(args, 'checkpoint_dir', 'experiments/models'),
+            checkpoint_dir=getattr(args, 'checkpoint_dir', str(BC_MODELS_DIR)),
             validate_every=getattr(args, 'validate_every', 5),
             early_stopping_patience=getattr(args, 'early_stopping_patience', 20),
         )
@@ -232,7 +236,7 @@ class TemporalTrainingConfig:
     # Logging and checkpointing
     log_interval: int = 10
     save_interval: int = 50
-    checkpoint_dir: str = "experiments/models"
+    checkpoint_dir: str = str(BC_MODELS_DIR)
     
     # Validation parameters
     validate_every: int = 5
@@ -404,7 +408,7 @@ class TemporalTrainingConfig:
             gradient_clip_norm=getattr(args, 'gradient_clip_norm', 1.0),
             log_interval=getattr(args, 'log_interval', 10),
             save_interval=getattr(args, 'save_interval', 50),
-            checkpoint_dir=getattr(args, 'checkpoint_dir', 'experiments/models'),
+            checkpoint_dir=getattr(args, 'checkpoint_dir', str(BC_MODELS_DIR)),
             validate_every=getattr(args, 'validate_every', 5),
             early_stopping_patience=getattr(args, 'early_stopping_patience', 20),
         )
@@ -430,7 +434,7 @@ class EvaluationConfig:
     randomization_profile: Optional[str] = None
     
     # Output
-    output_dir: str = "experiments/outputs/metrics"
+    output_dir: str = str(METRICS_DIR / "bc")
     save_trajectories: bool = True
     generate_plots: bool = True
     
@@ -451,6 +455,8 @@ class EvaluationConfig:
         if self.duration_sec <= 0:
             raise ValueError(f"Invalid duration_sec: {self.duration_sec}")
         
+        # Redirect legacy output paths and ensure directory exists
+        self.output_dir = str(redirect_legacy_dir(self.output_dir))
         os.makedirs(self.output_dir, exist_ok=True)
 
 

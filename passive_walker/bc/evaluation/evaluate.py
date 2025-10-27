@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from passive_walker.core.env import PassiveWalkerEnv
+from passive_walker.config.paths import METRICS_DIR, BC_PLOTS_DIR, REPORTS_DIR, ensure_dir_exists
+from passive_walker.config.paths_redirect import redirect_legacy_dir
 from passive_walker.core.reward import compute_reward
 from passive_walker.bc.config import EvaluationConfig
 from passive_walker.bc.utils import set_seed, Normalizer
@@ -504,7 +506,10 @@ class ComprehensiveEvaluator:
     
     def _save_results(self, results: EvaluationResults):
         """Save evaluation results."""
-        os.makedirs(self.config.output_dir, exist_ok=True)
+        # Redirect and ensure output dir exists
+        out_dir = redirect_legacy_dir(self.config.output_dir)
+        self.config.output_dir = str(out_dir)
+        ensure_dir_exists(out_dir)
         
         # Save detailed results
         results_path = os.path.join(self.config.output_dir, 'evaluation_results.json')
@@ -761,7 +766,7 @@ if __name__ == "__main__":
                       help="Path to model checkpoint")
     parser.add_argument("--backend", type=str, default="torch", choices=["torch", "jax"],
                       help="Model backend")
-    parser.add_argument("--output-dir", type=str, default="experiments/outputs/evaluation",
+    parser.add_argument("--output-dir", type=str, default=str(METRICS_DIR / "bc"),
                       help="Output directory for results")
     
     # Evaluation configuration

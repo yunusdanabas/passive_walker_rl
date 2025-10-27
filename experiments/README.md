@@ -2,13 +2,22 @@
 
 This directory contains all experimental work for the passive walker RL project.
 
-## Structure
+## Structure (Unified)
 
-- `models/` - Trained model checkpoints and metadata
 - `data/` - Training datasets and collected demonstrations
-- `results/` - Experiment results and training logs
-- `outputs/` - Evaluation outputs including plots, reports, and metrics
+- `models/` - Trained model checkpoints
+  - `bc/`
+  - `ppo/`
+- `runs/` - Training logs (TensorBoard, etc.)
+  - `bc/`
+  - `ppo/`
+- `analysis/` - All analysis artifacts
+  - `metrics/` - JSON metrics and evaluation outputs
+  - `plots/` - Visualizations
+    - `bc/`
+    - `ppo/`
+  - `reports/` - Markdown/HTML reports
 
 ## Usage
 
-When running experiments, outputs will be automatically saved to the appropriate subdirectories based on the experiment type and configuration.
+All writers are updated to save into this structure. Legacy paths (e.g., `outputs/`, `results/`, `ppo_plots/`) are auto-redirected with a deprecation warning.
