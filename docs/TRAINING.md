@@ -69,6 +69,19 @@ python -m passive_walker.bc.training.train \
     --out experiments/models/bc/lstm_model
 ```
 
+### GPU for BC (optional)
+
+```bash
+mamba activate main
+cd /home/yunusdanabas/passive_walker_rl
+
+python -m passive_walker.bc.training.train \
+    --backend torch \
+    --data experiments/data/fsm_demos \
+    --epochs 100 \
+    --gpu
+```
+
 **Output:**
 - Model: `experiments/models/bc/{model_name}.pt`
 - Metrics: `experiments/models/bc/{model_name}_metrics.json`
@@ -99,6 +112,19 @@ python -m passive_walker.ppo.train \
     --experiment_name my_ppo \
     --timesteps 100000 \
     --seed 42
+```
+
+### GPU (optional)
+
+```bash
+mamba activate main
+cd /home/yunusdanabas/passive_walker_rl
+
+# Use GPU if available (falls back to CPU if not)
+python -m passive_walker.ppo.train \
+    --experiment_name my_ppo_cuda \
+    --timesteps 200000 \
+    --gpu
 ```
 
 ### Model Configurations

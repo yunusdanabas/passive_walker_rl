@@ -13,6 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from passive_walker.ppo.models import create_actor_critic
+from passive_walker.common.device import pick_torch_device
 from passive_walker.ppo.config import PPOConfig, create_default_configs
 from passive_walker.ppo.trainer import PPOTrainer
 from passive_walker.core.env import PassiveWalkerEnv
@@ -36,7 +37,9 @@ def main():
                        help="Random seed")
     parser.add_argument("--device", type=str, default="cpu",
                        choices=["cpu", "cuda"],
-                       help="Device to train on")
+                       help="Device to train on (deprecated; prefer --gpu)")
+    parser.add_argument("--gpu", action="store_true",
+                       help="Use CUDA if available (optional)")
     # Deprecated --out retained for compatibility; redirected if used
     parser.add_argument("--out", type=str, default=str(PPO_RUNS_DIR),
                        help="Output directory (deprecated; use centralized runs dir)")
@@ -130,12 +133,19 @@ def main():
     print(f"Model: {config.model_type}")
     print(f"Timesteps: {config.total_timesteps}")
     print(f"Eval frequency: {config.eval_freq}")
-    print(f"Device: {args.device}")
+    # Resolve device with optional CUDA preference
+    if getattr(args, "gpu", False):
+        device = pick_torch_device(True)
+        if device == "cpu":
+            print("[WARN] --gpu requested but CUDA not available; using CPU")
+    else:
+        device = args.device
+
+    print(f"Device: {device}")
     print(f"Curriculum: {config.use_curriculum}")
     print(f"Domain randomization: {config.use_domain_randomization}")
     
     # Set random seed
-    import torch
     import numpy as np
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -162,7 +172,7 @@ def main():
     ensure_dir_exists(out_dir)
 
     # Create trainer
-    trainer = PPOTrainer(model, config, device=args.device, output_dir=out_dir)
+    trainer = PPOTrainer(model, config, device=device, output_dir=out_dir)
     
     # Train
     try:

@@ -248,7 +248,7 @@ class PPOTrainer:
         for epoch in range(self.config.n_epochs):
             # Sample mini-batches
             batch_size = len(data["observations"])
-            indices = torch.randperm(batch_size)
+            indices = torch.randperm(batch_size, device=self.device)
             
             for start_idx in range(0, batch_size, self.config.batch_size):
                 end_idx = min(start_idx + self.config.batch_size, batch_size)

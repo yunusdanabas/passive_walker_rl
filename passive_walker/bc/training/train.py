@@ -11,9 +11,10 @@ import sys
 import os
 import numpy as np
 from passive_walker.bc.utils import (
-    set_seed, set_global_seed, pick_device, ensure_dir, save_checkpoint, MetricsWriter, Normalizer,
+    set_seed, set_global_seed, ensure_dir, save_checkpoint, MetricsWriter, Normalizer,
     ckpt_name_for, meta_name_for, metrics_name_for, save_metrics_json
 )
+from passive_walker.common.device import pick_torch_device
 from passive_walker.bc.data.dataset import discover_npzs, split_by_episode, load_xy, create_data_loader, create_sequence_loader_from_files
 from passive_walker.bc.data.augmentation import create_default_temporal_augmentation, create_light_temporal_augmentation, create_heavy_temporal_augmentation
 from passive_walker.config.paths import BC_MODELS_DIR
@@ -70,7 +71,7 @@ def train_torch(args):
     from passive_walker.bc.models.models_torch import TorchMLP, TorchMLPLarge
 
     # Setup device and data
-    device = pick_device(args.gpu)
+    device = pick_torch_device(args.gpu)
     print(f"[INFO] Using device: {device}")
 
     # Discover and split data
@@ -100,7 +101,15 @@ def train_torch(args):
 
     # Create model (use actual input dimension from data)
     input_dim = X_train.shape[1]
-    model = TorchMLPLarge(in_dim=input_dim, out_dim=y_train.shape[1], hidden=512, dropout=0.1).to(device)
+    if getattr(args, "model", "mlp_large") == "mlp_small":
+        model = TorchMLP(in_dim=input_dim, out_dim=y_train.shape[1], hidden=getattr(args, "hidden", 128)).to(device)
+    else:
+        model = TorchMLPLarge(
+            in_dim=input_dim,
+            out_dim=y_train.shape[1],
+            hidden=getattr(args, "hidden", 512),
+            dropout=getattr(args, "dropout", 0.1),
+        ).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
 
     # Loss function
@@ -184,6 +193,10 @@ def train_torch(args):
                 "steps": X_train.shape[0],
                 "best_val_loss": best_val_loss,
                 "frame_stack": args.frame_stack,
+                "backend": "torch",
+                "model": getattr(args, "model", "mlp_large"),
+                "hidden": getattr(args, "hidden", 512),
+                "dropout": getattr(args, "dropout", 0.1),
             }
             checkpoint_path, meta_path = save_checkpoint(
                 model, normalizer, meta, args.save_dir,
@@ -300,8 +313,15 @@ def train_jax(args):
     # Create model
     key = jax.random.PRNGKey(args.seed)
     key, subkey = jax.random.split(key)
-    input_dim = 11 * args.frame_stack
-    model = make_model(in_dim=input_dim, out_dim=out_dim, width=128, depth=2, key=subkey)
+    # Use actual input dimension from loaded data
+    input_dim = X_train.shape[1]
+    model = make_model(
+        in_dim=input_dim,
+        out_dim=out_dim,
+        width=getattr(args, "width", 128),
+        depth=getattr(args, "depth", 2),
+        key=subkey,
+    )
     
     # Setup optimizer
     filter_spec = eqx.is_array
@@ -434,8 +454,8 @@ def train_jax(args):
         "steps": steps,
         "in_dim": int(X_train.shape[1]),
         "out_dim": out_dim,
-        "hidden": 128,
-        "depth": 2,
+        "hidden": getattr(args, "width", 128),
+        "depth": getattr(args, "depth", 2),
         "lr": args.lr,
         "weight_decay": 1e-5,
         "batch": args.batch,
@@ -515,7 +535,7 @@ def train_temporal_torch(config):
     from passive_walker.bc.models.temporal_torch import create_temporal_model
     
     # Setup device and data
-    device = pick_device(config.gpu if hasattr(config, 'gpu') else False)
+    device = pick_torch_device(config.gpu if hasattr(config, 'gpu') else False)
     print(f"[INFO] Using device: {device}")
     
     # Discover and split data
@@ -1003,6 +1023,13 @@ def main():
     p.add_argument("--w3", type=float, default=0.1)
     p.add_argument("--w4", type=float, default=0.01)
     p.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack for temporal context")
+    # Architecture options
+    p.add_argument("--model", choices=["mlp_small", "mlp_large"], default="mlp_large")
+    p.add_argument("--hidden", type=int, default=512)
+    p.add_argument("--dropout", type=float, default=0.1)
+    # JAX architecture options
+    p.add_argument("--width", type=int, default=128)
+    p.add_argument("--depth", type=int, default=2)
     args = p.parse_args()
 
     # Redirect legacy save dir if needed
