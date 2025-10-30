@@ -20,6 +20,7 @@ results/**
 checkpoints/
 logs/
 wandb/
+experiments/
 
 # Environment files
 .env

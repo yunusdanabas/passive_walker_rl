@@ -234,12 +234,18 @@ def save_checkpoint(model, normalizer: Normalizer, meta: dict, save_dir: str,
     ckpt_path = os.path.join(save_dir, stem + ".pt")
     meta_path = os.path.join(save_dir, meta_name_for("torch", section, seed, 1, steps))
     
-    # Save model
-    torch.save(model.state_dict(), ckpt_path)
+    # Save model and essential metadata inside checkpoint for standalone loading
+    ckpt_payload = {
+        "model_state_dict": model.state_dict(),
+        "normalizer_mean": normalizer.mean.tolist() if hasattr(normalizer, "mean") and normalizer.mean is not None else None,
+        "normalizer_std": normalizer.std.tolist() if hasattr(normalizer, "std") and normalizer.std is not None else None,
+        "meta": {k: v for k, v in meta.items() if k not in ("normalizer_mean", "normalizer_std")},
+    }
+    torch.save(ckpt_payload, ckpt_path)
     
-    # Add normalizer info to metadata
-    meta["normalizer_mean"] = normalizer.mean.tolist()
-    meta["normalizer_std"] = normalizer.std.tolist()
+    # Add normalizer info to metadata file (optional; can be deleted by scripts later)
+    meta["normalizer_mean"] = normalizer.mean.tolist() if hasattr(normalizer, "mean") and normalizer.mean is not None else None
+    meta["normalizer_std"] = normalizer.std.tolist() if hasattr(normalizer, "std") and normalizer.std is not None else None
     
     # Save metadata
     save_json(meta_path, meta)
@@ -259,7 +265,13 @@ def load_checkpoint(ckpt_path: str, model) -> 'torch.nn.Module':
         Model with loaded weights
     """
     import torch
-    model.load_state_dict(torch.load(ckpt_path, map_location="cpu"))
+    payload = torch.load(ckpt_path, map_location="cpu")
+    # Backward compatibility: accept raw state_dict or dict payload
+    if isinstance(payload, dict) and "model_state_dict" in payload:
+        state = payload["model_state_dict"]
+    else:
+        state = payload
+    model.load_state_dict(state)
     return model
 
 
