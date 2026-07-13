@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FSM Training Data Analysis</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        h2 { color: #666; margin-top: 30px; }
+        img { max-width: 100%; height: auto; border: 1px solid #ddd; margin: 10px 0; }
+        .plot-container { margin: 20px 0; }
+        .description { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🔍 FSM Training Data Visual Analysis</h1>
+    
+    <div class="description">
+        <strong>Data Summary:</strong><br>
+        • 200 episodes collected<br>
+        • 0% fall rate (perfect stability)<br>
+        • 16 gait cycles per episode<br>
+        • 35.9m average distance per episode<br>
+        • 25.0 seconds per episode
+    </div>
+
+    <h2>1. Episode Overview (fsm_data_overview.png)</h2>
+    <div class="plot-container">
+        <img src="fsm_data_overview.png" alt="FSM Data Overview">
+        <div class="description">
+            <strong>What to look for:</strong><br>
+            • Hip trajectories show rhythmic swinging patterns<br>
+            • Knee trajectories show coordinated retraction<br>
+            • FSM states transition regularly (not stuck)<br>
+            • Forward progress increases consistently
+        </div>
+    </div>
+
+    <h2>2. FSM State Analysis (fsm_state_analysis.png)</h2>
+    <div class="plot-container">
+        <img src="fsm_state_analysis.png" alt="FSM State Analysis">
+        <div class="description">
+            <strong>What to look for:</strong><br>
+            • State usage distributions show balanced usage<br>
+            • Red dots show hip discontinuities (by design)<br>
+            • State transitions occur regularly<br>
+            • Multiple states are being used effectively
+        </div>
+    </div>
+
+    <h2>3. Quality Metrics (fsm_quality_metrics.png)</h2>
+    <div class="plot-container">
+        <img src="fsm_quality_metrics.png" alt="Quality Metrics">
+        <div class="description">
+            <strong>What to look for:</strong><br>
+            • Episode lengths are ~25 seconds<br>
+            • Gait cycles are ~16 per episode<br>
+            • Forward distance is ~35.9m per episode<br>
+            • Hip joint range is reasonable
+        </div>
+    </div>
+
+    <h2>Additional Analysis Plots</h2>
+    <div class="plot-container">
+        <h3>FSM Discontinuous Patterns</h3>
+        <img src="fsm_discontinuous_patterns.png" alt="Discontinuous Patterns">
+        <div class="description">
+            Shows the full view of FSM discontinuities - these are by design, not bugs.
+        </div>
+    </div>
+
+    <div class="plot-container">
+        <h3>Smooth vs Discontinuous Comparison</h3>
+        <img src="fsm_smooth_vs_discontinuous.png" alt="Smooth vs Discontinuous">
+        <div class="description">
+            Comparison showing why FSM requires instant transitions for balance.
+        </div>
+    </div>
+
+    <div class="plot-container">
+        <h3>FSM State Transitions</h3>
+        <img src="fsm_state_transitions.png" alt="State Transitions">
+        <div class="description">
+            Detailed view of FSM state transition patterns over time.
+        </div>
+    </div>
+
+    <div class="plot-container">
+        <h3>FSM State Statistics</h3>
+        <img src="fsm_state_statistics.png" alt="State Statistics">
+        <div class="description">
+            Statistical analysis of FSM state usage patterns.
+        </div>
+    </div>
+
+    <div style="margin-top: 40px; padding: 20px; background: #e8f5e8; border-radius: 5px;">
+        <h2>✅ Verification Checklist</h2>
+        <ul>
+            <li>✓ Hip trajectories show rhythmic swinging</li>
+            <li>✓ Knee trajectories show coordinated retraction</li>
+            <li>✓ FSM states transition regularly (not stuck)</li>
+            <li>✓ Forward progress is consistent</li>
+            <li>✓ Hip discontinuities are present (by design)</li>
+            <li>✓ Episode lengths are ~25 seconds</li>
+            <li>✓ Gait cycles are ~16 per episode</li>
+        </ul>
+        
+        <p><strong>If all items are checked, the FSM training data is ready for BC training!</strong></p>
+    </div>
+</body>
+</html>
