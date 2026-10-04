@@ -5,6 +5,7 @@ Bipedal walking environment with FSM and neural network control modes.
 Supports both headless and GUI operation with physics simulation.
 """
 from __future__ import annotations
+from importlib.resources import files
 from typing import Optional
 
 # =====================
@@ -13,7 +14,7 @@ from typing import Optional
 # Simulation parameters
 CTRL_HZ = 100.0          # Controller frequency (Hz)
 SIM_SECONDS = 25.0      # Default episode length (s)
-XML_PATH = "passive_walker/assets/passiveWalker_model.xml"
+XML_PATH = str(files("passive_walker") / "assets" / "passiveWalker_model.xml")
 
 # Physics parameters
 RAMP_DEG = 10.0         # Incline angle (degrees, positive = downhill)

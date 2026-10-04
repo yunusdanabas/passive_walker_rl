@@ -1,18 +1,30 @@
 """
 Central Path Configuration for Passive Walker
 
-Unified path management for all experiments and outputs.
+Unified path management for all experiments and outputs. Importing this module
+has no side effects: writers create the directories they need via
+``ensure_dir_exists``.
+
+The experiments root is ``$PASSIVE_WALKER_HOME/experiments`` if the environment
+variable is set, otherwise ``<repo>/experiments`` for a source checkout, and
+``./experiments`` (current working directory) for an installed package.
 """
 
 from __future__ import annotations
+import os
 from pathlib import Path
 
 
 def _get_project_root() -> Path:
-    """Get project root directory."""
-    # This file is at passive_walker/config/paths.py
-    # Project root is 2 levels up
-    return Path(__file__).parent.parent.parent
+    """Directory that holds ``experiments/``."""
+    override = os.environ.get("PASSIVE_WALKER_HOME")
+    if override:
+        return Path(override).expanduser().resolve()
+    # This file is at passive_walker/config/paths.py; the repo root is 2 levels up.
+    source_root = Path(__file__).resolve().parent.parent.parent
+    if (source_root / "pyproject.toml").is_file():
+        return source_root
+    return Path.cwd()
 
 
 # Project root
@@ -48,35 +60,13 @@ FIGURES_DIR = ANALYSIS_DIR / "figures"
 def ensure_dir_exists(path: Path | str) -> Path:
     """
     Ensure directory exists, creating parent directories if needed.
-    
+
     Args:
         path: Path to ensure exists
-        
+
     Returns:
         Path object (for chaining)
     """
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
     return path
-
-
-# Ensure key directories exist
-for directory in [
-    DATA_DIR,
-    FSM_DATA_DIR,
-    MODELS_DIR,
-    BC_MODELS_DIR,
-    PPO_MODELS_DIR,
-    RUNS_DIR,
-    BC_RUNS_DIR,
-    PPO_RUNS_DIR,
-    ANALYSIS_DIR,
-    PLOTS_DIR,
-    BC_PLOTS_DIR,
-    PPO_PLOTS_DIR,
-    REPORTS_DIR,
-    METRICS_DIR,
-    FIGURES_DIR,
-]:
-    ensure_dir_exists(directory)
-

@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "passive-walker-rl"
+dynamic = ["version"]
+description = "Variable-Length-Leg passive bipedal walker in MuJoCo: FSM expert, behavior cloning, and PPO"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Yunus Emre Danabas" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "numpy>=1.24",
+    "mujoco>=3.0",
+    "gymnasium>=0.29",
+    "pyyaml>=6.0",
+    "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+torch = ["torch>=2.0", "tensorboard>=2.12"]
+jax = ["jax>=0.4.20", "equinox>=0.11", "optax>=0.1.7"]
+analysis = ["seaborn>=0.12", "scipy>=1.10"]
+dev = ["pytest>=7", "ruff>=0.5"]
+all = ["passive-walker-rl[torch,jax,analysis,dev]"]
+
+[project.scripts]
+walker-demo = "passive_walker.core.env:main"
+walker-collect = "passive_walker.fsm.collect:main"
+walker-train-bc = "passive_walker.bc.training.train:main"
+walker-play-bc = "passive_walker.bc.evaluation.play:main"
+walker-train-ppo = "passive_walker.ppo.train:main"
+walker-play-ppo = "passive_walker.ppo.play_ppo_model:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "passive_walker.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["passive_walker*"]
+
+[tool.setuptools.package-data]
+passive_walker = ["assets/*.xml"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+xfail_strict = true
+markers = ["slow: end-to-end tests that run the collector or long rollouts"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
