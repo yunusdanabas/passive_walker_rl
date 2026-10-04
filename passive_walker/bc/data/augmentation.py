@@ -327,7 +327,3 @@ class AugmentedSequenceDataset:
     def __iter__(self):
         for i in range(len(self)):
             yield self[i]
-
-
-# Advanced augmentation techniques have been archived to _archive/bc/data/augmentation_advanced.py
-

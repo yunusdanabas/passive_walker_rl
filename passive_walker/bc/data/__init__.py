@@ -21,7 +21,6 @@ from passive_walker.bc.data.augmentation import (
     create_light_temporal_augmentation,
     create_heavy_temporal_augmentation
 )
-from passive_walker.bc.data.curriculum import CurriculumScheduler
 
 __all__ = [
     "SequenceDataset",
@@ -41,6 +40,5 @@ __all__ = [
     "create_default_temporal_augmentation",
     "create_light_temporal_augmentation",
     "create_heavy_temporal_augmentation",
-    "CurriculumScheduler",
 ]
 

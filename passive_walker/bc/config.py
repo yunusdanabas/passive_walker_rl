@@ -11,7 +11,6 @@ import os
 import json
 
 from passive_walker.config.paths import BC_MODELS_DIR, BC_RUNS_DIR, METRICS_DIR
-from passive_walker.config.paths_redirect import redirect_legacy_dir
 
 
 @dataclass
@@ -455,8 +454,7 @@ class EvaluationConfig:
         if self.duration_sec <= 0:
             raise ValueError(f"Invalid duration_sec: {self.duration_sec}")
         
-        # Redirect legacy output paths and ensure directory exists
-        self.output_dir = str(redirect_legacy_dir(self.output_dir))
+        # Ensure output directory exists
         os.makedirs(self.output_dir, exist_ok=True)
 
 

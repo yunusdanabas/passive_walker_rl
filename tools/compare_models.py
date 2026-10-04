@@ -11,7 +11,6 @@ from pathlib import Path
 import sys
 
 from passive_walker.config.paths import REPORTS_DIR, ensure_dir_exists
-from passive_walker.config.paths_redirect import redirect_legacy_dir
 
 
 def load_metrics(model_path: str):
@@ -94,7 +93,7 @@ def main():
     args = parser.parse_args()
     
     # Redirect and ensure output directory exists
-    out_path = Path(redirect_legacy_dir(args.output))
+    out_path = Path(args.output)
     ensure_dir_exists(out_path.parent)
 
     # Compare models

@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import sys
 from passive_walker.config.paths import PPO_PLOTS_DIR, ensure_dir_exists
-from passive_walker.config.paths_redirect import redirect_legacy_dir
 
 
 def plot_training_curves(log_dir: str, out_file: str = None):
@@ -121,7 +120,7 @@ def main():
     args = parser.parse_args()
 
     # Redirect legacy paths and ensure directories
-    out_path = Path(redirect_legacy_dir(args.out)) if args.out else None
+    out_path = Path(args.out) if args.out else None
     if out_path:
         ensure_dir_exists(out_path.parent)
 

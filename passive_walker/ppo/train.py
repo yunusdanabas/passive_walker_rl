@@ -18,7 +18,6 @@ from passive_walker.ppo.config import PPOConfig, create_default_configs
 from passive_walker.ppo.trainer import PPOTrainer
 from passive_walker.core.env import PassiveWalkerEnv
 from passive_walker.config.paths import PPO_MODELS_DIR, PPO_RUNS_DIR, METRICS_DIR, ensure_dir_exists
-from passive_walker.config.paths_redirect import redirect_legacy_dir
 
 
 def main():
@@ -167,8 +166,7 @@ def main():
             num_layers=config.num_layers
         )
     
-    # Redirect legacy out path and ensure dir exists
-    out_dir = str(redirect_legacy_dir(args.out))
+    out_dir = args.out
     ensure_dir_exists(out_dir)
 
     # Create trainer

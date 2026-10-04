@@ -1,88 +1,52 @@
 # Byte-compiled / cache
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
 
-# Data & results
-data/**
-results/**
+# Packaging
+build/
+dist/
+*.egg-info/
 
-# Model checkpoints & logs
+# Experiment outputs (data, checkpoints, logs, plots). Only the README is tracked.
+experiments/*
+!experiments/README.md
+data/
+results/
+checkpoints/
+logs/
+runs/
+wandb/
+MUJOCO_LOG.TXT
+
+# Large binary artifacts (never commit; regenerate or store elsewhere)
 *.pkl
 *.pkl.gz
 *.msgpack
 *.pt
+*.pth
 *.eqx
 *.npz
+events.out.tfevents.*
+# Small, reviewed test fixtures are the exception
 !tests/data/*.npz
 
-# Training outputs
-checkpoints/
-logs/
-wandb/
-experiments/
-
-# Environment files
+# Environments and secrets
 .env
-.env.local
-.env.*.local
-
-# Hidden files and directories
-.*
-!.gitignore
-!.github/
-
-# IDE files
-.cursor/
-.vscode/
-.ruff_cache/
-
-# Python cache and test files
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.nox/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
+.env.*
+.venv/
+venv/
 .python-version
 
-# pipenv
-Pipfile.lock
-
-# poetry
-poetry.lock
-
-# Celery
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
+# Tool caches
+.pytest_cache/
+.ruff_cache/
 .mypy_cache/
-.dmypy.json
-dmypy.json
+.coverage
+htmlcov/
+.ipynb_checkpoints/
 
-# Pyre type checker
-.pyre/
-
+# Editors / OS
+.vscode/
+.idea/
+.cursor/
+.DS_Store

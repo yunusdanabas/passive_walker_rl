@@ -18,7 +18,6 @@ from passive_walker.common.device import pick_torch_device
 from passive_walker.bc.data.dataset import discover_npzs, split_by_episode, load_xy, create_data_loader, create_sequence_loader_from_files
 from passive_walker.bc.data.augmentation import create_default_temporal_augmentation, create_light_temporal_augmentation, create_heavy_temporal_augmentation
 from passive_walker.config.paths import BC_MODELS_DIR
-from passive_walker.config.paths_redirect import redirect_legacy_dir
 
 
 def compute_advanced_loss(pred, target, w1=1.0, w2=0.0, w3=0.1, w4=0.01):
@@ -1031,9 +1030,6 @@ def main():
     p.add_argument("--width", type=int, default=128)
     p.add_argument("--depth", type=int, default=2)
     args = p.parse_args()
-
-    # Redirect legacy save dir if needed
-    args.save_dir = str(redirect_legacy_dir(args.save_dir))
 
     set_seed(args.seed)
 

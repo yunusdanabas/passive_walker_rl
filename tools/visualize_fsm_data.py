@@ -11,7 +11,6 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from passive_walker.config.paths import PLOTS_DIR, ensure_dir_exists
-from passive_walker.config.paths_redirect import redirect_legacy_dir
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -90,7 +89,7 @@ def visualize_fsm_data(data_dir: str, output_file: str = None):
     plt.tight_layout()
     
     if output_file:
-        out_path = Path(redirect_legacy_dir(output_file))
+        out_path = Path(output_file)
         ensure_dir_exists(out_path.parent)
         plt.savefig(out_path, dpi=150, bbox_inches='tight')
         print(f"Saved visualization to: {out_path}")

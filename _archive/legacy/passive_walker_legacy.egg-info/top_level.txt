@@ -1,6 +1,0 @@
-bc
-brax
-controllers
-envs
-ppo
-utils

@@ -20,4 +20,5 @@ This directory contains all experimental work for the passive walker RL project.
 
 ## Usage
 
-All writers are updated to save into this structure. Legacy paths (e.g., `outputs/`, `results/`, `ppo_plots/`) are auto-redirected with a deprecation warning.
+Writers save into this structure. Everything here except this README is git-ignored:
+regenerate data and models with the CLIs. Set `PASSIVE_WALKER_HOME` to place `experiments/` elsewhere.

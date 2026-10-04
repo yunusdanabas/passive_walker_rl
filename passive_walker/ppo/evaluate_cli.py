@@ -16,7 +16,6 @@ from passive_walker.ppo.models import create_actor_critic
 from passive_walker.ppo.config import PPOConfig
 from passive_walker.ppo.evaluate import PolicyEvaluator, PolicyVisualizer
 from passive_walker.config.paths import METRICS_DIR, PLOTS_DIR, PPO_PLOTS_DIR, ensure_dir_exists
-from passive_walker.config.paths_redirect import redirect_legacy_dir
 from passive_walker.bc.models.models_torch import TorchMLP
 import torch
 import json
@@ -62,8 +61,7 @@ def main():
         deterministic=args.deterministic
     )
     
-    # Redirect and ensure output dir
-    args.out = str(redirect_legacy_dir(args.out))
+    # Ensure output dir
     ensure_dir_exists(args.out)
 
     # Create visualizer

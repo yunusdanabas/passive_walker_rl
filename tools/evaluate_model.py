@@ -15,7 +15,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from passive_walker.core.env import PassiveWalkerEnv
 from passive_walker.config.paths import METRICS_DIR, ensure_dir_exists
-from passive_walker.config.paths_redirect import redirect_legacy_dir
 
 
 def evaluate_bc_model(model_path: str, episodes: int = 10, gui: bool = False):
@@ -103,7 +102,7 @@ def main():
     
     # Save metrics if requested
     if args.out and metrics:
-        out_path = Path(redirect_legacy_dir(args.out))
+        out_path = Path(args.out)
         ensure_dir_exists(out_path.parent)
         with open(out_path, 'w') as f:
             json.dump(metrics, f, indent=2)

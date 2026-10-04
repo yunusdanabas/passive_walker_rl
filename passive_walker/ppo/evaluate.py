@@ -13,7 +13,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 from passive_walker.config.paths import PPO_PLOTS_DIR, METRICS_DIR, ensure_dir_exists
-from passive_walker.config.paths_redirect import redirect_legacy_dir
 import json
 import time
 
@@ -281,8 +280,7 @@ class PolicyVisualizer:
         Args:
             save_dir: Directory to save plots
         """
-        redirected = redirect_legacy_dir(save_dir)
-        self.save_dir = Path(redirected)
+        self.save_dir = Path(save_dir)
         ensure_dir_exists(self.save_dir)
         
         # Set plotting style

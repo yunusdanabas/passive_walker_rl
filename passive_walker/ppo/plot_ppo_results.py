@@ -9,7 +9,6 @@ No localhost required - saves plots as images.
 import argparse
 from pathlib import Path
 from passive_walker.config.paths import PPO_RUNS_DIR, PPO_PLOTS_DIR, ensure_dir_exists
-from passive_walker.config.paths_redirect import redirect_legacy_dir
 import os
 import sys
 from pathlib import Path
@@ -211,9 +210,7 @@ def main():
     print(f"Log directory: {args.logdir}")
     print(f"Output directory: {args.output}\n")
     
-    # Redirect legacy paths and ensure dirs
-    args.logdir = str(redirect_legacy_dir(args.logdir))
-    args.output = str(redirect_legacy_dir(args.output))
+    # Ensure output dir
     ensure_dir_exists(Path(args.output))
 
     # Read metrics
