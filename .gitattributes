@@ -1,0 +1,12 @@
+# Normalize text files to LF in the repository and in every checkout,
+# so files edited on Windows run unchanged on Linux (development PC, cluster).
+* text=auto eol=lf
+
+# Binary artifacts: never touch line endings
+*.png binary
+*.jpg binary
+*.npz binary
+*.pt binary
+*.pth binary
+*.eqx binary
+*.bundle binary
