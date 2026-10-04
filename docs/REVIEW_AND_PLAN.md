@@ -1,7 +1,17 @@
 # Passive Walker RL: code review and stabilization plan
 
-> Written 2026-10-04 at commit `e0ab85f`. The findings in §2.1 were confirmed at runtime; see `docs/baseline.md`.
+> Review written at commit `e0ab85f` and merged with a second, independent review (2026-10-03). The findings in §2.1 items 1–5 were confirmed at runtime; see `docs/baseline.md`. Companion documents: `docs/WALKING_METRIC.md` (benchmark specification) and `docs/ENVIRONMENT.md` (machines and setup).
 
+## Status
+
+| Phase | State |
+|---|---|
+| 0. Baseline and safety net | **Done.** Baseline numbers in `docs/baseline.md`; golden FSM trajectory test added. |
+| 1. Repo hygiene | **Done.** History rewritten (2.35 GB → about 7 MB); dead code removed; `pyproject.toml` packaging; location-independent paths and assets; BC playback import fixed. The pre-rewrite history and the historical experiment artifacts are archived outside the repo (verified git bundle + SHA-256 manifest). |
+| 2. Environment correctness | **Next.** |
+| 3–9 | Planned (below). |
+
+Work happens on the `stabilization` branch and is merged into `master` at milestones.
 
 ## Context
 
@@ -10,14 +20,28 @@ You want to restart `passive_walker_rl` after about a year away (last code commi
 This document is the result of a full static review of every active module, the tests, the scripts, the docs, the tracked experiment artifacts and the git history. The critical findings were then reproduced at runtime, and baseline numbers were recorded in `docs/baseline.md` (Phase 0).
 
 **Decisions you made (Q&A):**
-- Goal: research / thesis results. Correctness and reproducibility come first.
+- Goal: research / thesis results. Correctness and reproducibility come first. All long-term goals stay relevant, pursued in sequence:
+  1. reproduce the FSM;
+  2. outperform it with learned policies;
+  3. compare learning algorithms;
+  4. eventually transfer to physical hardware, which is blocked until a hardware specification exists.
 - Keep **both** BC backends (PyTorch and JAX/Equinox), at feature parity.
-- **Full cleanup with a history rewrite.** This needs a force-push to `master`, so it is gated on your explicit go-ahead at execution time.
+- Full cleanup with a history rewrite. **Done**, with the old history archived outside the repo.
 - Breaking the env/obs interface is fine. Old checkpoints and datasets become obsolete; we retrain.
 - In scope: BC fidelity vs the FSM, BC→PPO fine-tuning, recurrent vs feedforward policies, robustness (domain randomization and pushes).
 - Rewrite PPO in-house, CleanRL-style.
 - Reward speed target: you don't remember. Make it configurable and measure the FSM's reward under each option before choosing.
+- Evaluation combines survival, distance, speed tracking, actuation efficiency, gait quality and robustness into one versioned benchmark (`docs/WALKING_METRIC.md`), with every component also reported on its own.
 - Tracking: TensorBoard plus a JSON/CSV run directory.
+- Machines: development on an Ubuntu 24.04 PC; training on the UT Dallas Juno servers (details pending). See `docs/ENVIRONMENT.md`.
+- Repository rule: no tool or assistant attribution in commits, trailers, branch names or file contents.
+
+**Design decisions to preserve.** These are intentional and must not be "fixed":
+- the knees are sliders (units are m and m/s);
+- the leg structure is asymmetric (left leg fixed to the torso, a single relative hip hinge on the right leg);
+- the slope is tilted gravity on a flat plane;
+- policy actions are PD *targets*, not torques;
+- the FSM targets are discontinuous (smoothing them broke balance).
 
 ---
 
@@ -64,10 +88,10 @@ ppo/train.py + trainer.py + models.py (MLP/LSTM/GRU actor-critic) ──> final_
 | FSM collection | `fsm/collect.py` | Runs, but the data is degenerate (identical episodes, zero `act`) |
 | Curriculum collection, perturbations, physics conditions | `fsm/curriculum_collect.py`, `core/perturbations.py`, `core/physics_conditions.py` | **Non-functional** (no-ops or crashes) |
 | BC training | `bc/training/train.py`, `bc/data/*`, `bc/models/*` | MLP training works with `--label-type qdes`. The default (`act`) and temporal training are broken. |
-| BC play / eval | `bc/evaluation/play.py`, `evaluate.py` | **Import error** in the package `__init__`. The evaluator is broken. |
-| PPO | `ppo/train.py`, `trainer.py`, `models.py`, `buffer.py` | **The CLI crashes.** The trainer has algorithmic bugs. The past models came from `_archive/ppo/enhanced_trainer.py`. |
-| Unused | `passive_walker/jax/*`, `core/controller_jax.py` (only the opt-in slow PD path), `core/environment_enhancements.py`, `deployment/` (2 identical 474-line files), `bc/training/schedulers.py`, `bc/data/curriculum.py`, `ppo/ppo_train.yaml`, `config/paths_redirect.py`, `_archive/` (160 files) | Dead code |
-| Tools / scripts | `tools/*.py`, `scripts/overnight_*.sh` | Partly broken (missing functions, wrong defaults, hard-coded `/home/yunusdanabas` paths) |
+| BC play / eval | `bc/evaluation/play.py`, `evaluate.py` | Playback works again (import fixed in Phase 1). The comprehensive evaluator is broken (Phase 6). |
+| PPO | `ppo/train.py`, `trainer.py`, `models.py`, `buffer.py` | **The CLI crashes.** The trainer has algorithmic bugs. The past models came from the archived `enhanced_trainer.py`. |
+| Unused | `passive_walker/jax/*`, `core/environment_enhancements.py`, `deployment/` (2 identical 474-line files), `bc/training/schedulers.py`, `bc/data/curriculum.py`, `ppo/ppo_train.yaml`, `config/paths_redirect.py`, `_archive/` (160 files) | **Removed in Phase 1.** `core/controller_jax.py` (the opt-in slow PD path) goes in Phase 2. |
+| Tools / scripts | `tools/*.py`; `scripts/overnight_*.sh` | Tools are partly broken (missing functions, wrong defaults). The overnight scripts deleted their own outputs and were **removed**; Phase 6 replaces both. |
 
 ---
 
@@ -120,7 +144,48 @@ ppo/train.py + trainer.py + models.py (MLP/LSTM/GRU actor-critic) ──> final_
    - The symmetry term penalizes the alternating knee retraction the gait needs.
    - The upright bonus is about 0 at the FSM's pitch (std about 0.33 rad).
    - The foot-clearance softplus is nearly constant.
-   - `jax/reward_jax.py` uses a different, incompatible weight schema.
+   - The research `w_pitch` weight is configured but never used.
+   - The effort term adds hip torque (N·m) and knee forces (N) as if they had the same unit.
+   - Per-step terms are not scaled by the control period.
+   - A formula-only check gives idle, upright standing about 0.84 reward per step.
+   - `jax/reward_jax.py` used a different, incompatible weight schema (now removed).
+9. **Observation aliasing silently corrupts PPO transitions (critical).**
+   - `env._get_obs()` fills and returns the same reused `self._obs` buffer on every call (`core/env.py:283,307`).
+   - PPO calls `env.step()` first and then `buffer.add(obs, …)` (`ppo/trainer.py:349,352`). By then `obs` already holds the *next* state, so every stored state is paired with an action chosen from a different state.
+   - BC playback appends the same buffer to its frame-stack history, and the `rollout_obs` test helper keeps an uncopied reset observation.
+   - The collector is unaffected, because it copies into preallocated arrays.
+   - Fix: the env returns a fresh array (Phase 2), plus a transition-alignment test (Phase 5).
+10. **PPO evaluation and logging never fire.**
+    - `train()` checks `timestep % eval_freq == 0` and `timestep % log_freq == 0` while `timestep` grows in steps of 2048 (`ppo/trainer.py:463,485`).
+    - With the CLI's default `eval_freq = timesteps // 20` (5000 for 100k), the first trigger is at 1.28M steps. For 25k it's 6.4M, and the 1000-step log interval first fires at 256k.
+    - None of the 16 historical TensorBoard files contain evaluation scalars.
+    - Fix: threshold-based scheduling (Phase 5).
+11. **Randomization is not reproducible.**
+    - The `DomainRandomizer` is built once and keeps its original RNG after the env is reseeded.
+    - A profile alone doesn't enable randomization (item 7).
+    - `physics_conditions.py` implements "stiffness" by changing armature.
+    - Fix: explicit RNG ownership, reset from an immutable baseline model, and per-episode logging of the physics actually realized (Phase 2).
+12. **Contact bookkeeping has side effects.**
+    - Contacts are aggregated over the foot body's geoms without filtering the other geom to the ground.
+    - Reading the observation advances the contact-duration state, so calling `_get_obs()` twice changes the result.
+    - Fix in Phase 2.
+13. **Temporal BC losses and augmentation are inconsistent.**
+    - The masked loss averages over padded positions, so its magnitude depends on padding.
+    - The Torch and JAX helpers normalize differently, and one JAX helper masks after reducing to a scalar.
+    - Temporal training calls augmentation with three Torch tensors, but the augmentation interface takes two NumPy arrays, so enabling augmentation crashes.
+    - The BiLSTM uses future observations, so it can't be used as an online controller.
+    - Fix in Phase 4.
+14. **Evaluation and tools have further breakages.**
+    - The BC evaluation CLI passes a `seed` that `EvaluationConfig` doesn't define.
+    - The PPO evaluator builds its env without a mode, so it defaults to `fsm` and ignores the policy.
+    - Standard BC evaluation skips the saved normalizer.
+    - FSM comparison statistics are hard-coded, "imitation error" is measured against zero actions, and "energy" uses normalized target magnitudes.
+    - Success is defined differently across tools (50 steps, 100 steps, 80% of the horizon).
+    - `tools/visualize_results.py` imports a nonexistent Torch `SummaryReader`, and `tools/compare_models.py` defines `--output` but reads `args.out`.
+    - The env's GUI fallback can't catch window failures, because the window is created lazily on the first `render()`.
+    - Fix: replaced by the Phase 6 harness.
+15. **The overnight BC sweep deletes data.** `scripts/overnight_bc_sweep.sh:675` runs `find "$RUN_DIR" -type f ! -name "*.png" … -delete`, which removes every checkpoint (`.pt`, `.eqx`) and dataset (`.npz`) it just produced. The script and its PPO sibling have been removed.
+16. **The historical FSM plots disagree with each other.** `docs/fsm_analysis/view_plots.html` reports 35.9 m per episode, while `fsm_quality_metrics.png` and the overview's cumulative-distance panel show about 441 m. The plotting code summed positions instead of displacements. Treat those plots as qualitative only.
 
 ### 2.2 Architecture, maintainability and repo hygiene
 - **Not a real Gymnasium env.**
@@ -176,7 +241,7 @@ ppo/train.py + trainer.py + models.py (MLP/LSTM/GRU actor-critic) ──> final_
 
 ## 3. Prioritized stabilization plan
 
-Each phase ends green: tests pass, and it gets its own commit(s) on `claude/sleepy-knuth-7fyyum`.
+Each phase ends green: tests pass, and it gets its own commit(s) on the `stabilization` branch.
 
 ### Phase 0: Baseline and safety net (no behavior change)
 - Create a reproducible environment: `pyproject.toml` extras `[torch]`, `[jax]`, `[dev]`, plus a pinned lockfile or `requirements-dev.txt`. Install it in the container.
@@ -210,10 +275,13 @@ Each phase ends green: tests pass, and it gets its own commit(s) on `claude/slee
   - `render_mode` with "human" and "rgb_array" (via `mujoco.Renderer`);
   - register `PassiveWalker-v2`;
   - pass `gymnasium.utils.env_checker`.
+- Use Gymnasium seeding (`super().reset(seed=…)`, `self.np_random`) as the single RNG owner. Every random component (physics randomization, initial state, pushes) draws from it, so a reseed resets all of them (§2.1 item 11).
+- **Return a fresh observation array** from `reset()` and `step()`; never the internal buffer (§2.1 item 9).
 - Centralize all constants in one `core/params.py` (or a dataclass): joint ranges, gains, limits and FSM thresholds. Everything else imports from there.
 - Fix contacts:
   - read the normal force (`force[0]`) or use touch sensors;
-  - accumulate durations with the control dt;
+  - count only foot–ground contacts;
+  - accumulate durations with the control dt, and update them in `step()`, not in the observation getter;
   - share one contact definition with the FSM, or document why they differ (height vs force).
 - **Observation v2.**
   - Drop absolute `x`. Keep z, pitch, the velocities, the joint states and the fixed contact features. Make the layout explicit in a schema with named indices.
@@ -227,7 +295,9 @@ Each phase ends green: tests pass, and it gets its own commit(s) on `claude/slee
 - Make the reward configurable.
   - Turn the research reward's speed target, symmetry term and upright band into config parameters.
   - Add a `scripts/score_fsm_reward.py` that reports the FSM's per-term reward under each preset, so we can **decide the target from data**. This is the open question you flagged.
-  - Fix the ineffective terms.
+  - Fix the ineffective terms (§2.1 item 8): use or drop `w_pitch`, normalize hip and knee effort separately, and scale per-step terms by the control period.
+  - Keep the training reward separate from the benchmark metric (`docs/WALKING_METRIC.md`). The metric doesn't change when the reward is tuned.
+- The same report records the nominal FSM reference row for the walking metric: net distance, speed, actuation work from MuJoCo `actuator_force × actuator_velocity`, pitch RMS, and contact timing.
 - Remove the JAX PD path from the env.
 
 ### Phase 3: Data collection correctness
@@ -255,6 +325,9 @@ Each phase ends green: tests pass, and it gets its own commit(s) on `claude/slee
   - Only the model and training-step code differ per backend.
 - Fixes:
   - temporal training gets input normalization and real labels;
+  - one masked temporal loss, averaged over valid steps only and shared by Torch and JAX;
+  - the augmentation interface matches the temporal batches;
+  - BiLSTM is kept for offline analysis only, never as a controller;
   - no shuffling when a smoothness loss is used (or compute it inside sequences);
   - `play` builds the model from meta (no hard-coded sizes) and resets the frame-stack buffer per episode;
   - JAX dropout is actually applied.
@@ -265,7 +338,11 @@ Each phase ends green: tests pass, and it gets its own commit(s) on `claude/slee
 - Vectorized envs (`gymnasium.vector.AsyncVectorEnv`, N = cores).
 - Running obs and return normalization, saved inside the checkpoint.
 - Correct GAE with value bootstrap at the rollout end and terminated vs truncated handling, plus correct value clipping (old values).
-- A tanh-squashed or clipped Gaussian, a state-independent log-std, and separate actor and critic networks (optionally shared).
+- Bounded actions with consistent probability math. Either use a tanh-squashed Gaussian with the log-det-Jacobian correction, or sample unclipped and clip only when executing (CleanRL style), with log-probs computed on the sampled action. Document the choice.
+- A state-independent log-std, and separate actor and critic networks (optionally shared).
+- Store the observation that was used to choose the action, snapshotted before `env.step` (§2.1 item 9). A unit test checks `(obs_t, a_t, r_t, obs_t+1)` alignment with distinguishable states.
+- Threshold-based evaluation and logging schedules ("next eval at ≥ N steps"), not exact modulo (§2.1 item 10).
+- Check correctness against a trusted reference (CleanRL PPO on Pendulum) before any walker results.
 - **Recurrent PPO done properly:** hidden state carried through rollouts and reset on done, plus sequence-chunked minibatches with stored initial hidden states (LSTM and GRU).
 - **BC→PPO initialization:**
   - the actor architecture matches the BC MLP/temporal model, and weights load through the shared checkpoint schema;
@@ -275,18 +352,21 @@ Each phase ends green: tests pass, and it gets its own commit(s) on `claude/slee
 - Logging: TensorBoard plus `runs/<exp>/<timestamp>/{config.yaml, metrics.csv, eval.json, ckpt/}`.
 - Delete `ppo/buffer.py`'s unused vector buffer, `evaluate_cli.py`/`evaluate.py` duplication and `plot_ppo_results.py`. They fold into Phase 6.
 
-### Phase 6: One evaluation harness
-- `passive_walker/eval/`, a single `evaluate(policy, env_cfg, conditions, seeds)` used for FSM, BC and PPO alike. It covers:
-  - success rate (no fall at 25 s);
-  - distance and speed;
-  - cost of transport (∑|u·q̇|·dt / (m·g·d));
-  - gait cycles, step-length and period variability;
-  - imitation error vs the FSM;
-  - a **robustness grid** over slope × friction × push magnitude.
-- Output is JSON plus standard plots.
+### Phase 6: One evaluation harness and the walking benchmark
+- `passive_walker/eval/`, a single `evaluate(policy, env_cfg, conditions, seeds)` used for FSM, BC and PPO alike.
+- **Policy adapters** (FSM, hybrid-hip BC, hybrid-knees BC, full BC, PPO) own preprocessing, control mode, action assembly, model reconstruction from metadata, and recurrent-state reset.
+- An **action-sensitivity test** proves that two materially different policies produce different trajectories, so the harness can never silently evaluate the FSM.
+- It implements **Walking Metric v0** from `docs/WALKING_METRIC.md`:
+  - per-episode raw measurements: full-horizon survival, net distance, speed-tracking RMSE, actuation cost of transport from actuator force × velocity, and gait quality;
+  - per-condition scores `Q_c`;
+  - the **Nominal Walker Score** and **Robust Walker Score**;
+  - the qualification badge and a result card.
+- Imitation error is measured against the FSM's target *in the same state*.
+- Output is a per-episode JSON/CSV plus standard plots, stamped with the metric version, model-XML hash, git SHA and seeds.
 - The FSM is always evaluated as the reference row.
-- Report N ≥ 5 seeds with confidence intervals (rliable-style IQM).
-- Replace `tools/*` and the overnight shell scripts with `walker-sweep` (a YAML grid run through Python), with no hard-coded paths and no `|| true`.
+- Report N ≥ 5 seeds with confidence intervals (rliable-style IQM / bootstrap at the run level).
+- Simulated time and wall-clock time are always recorded separately.
+- Replace `tools/*` and the deleted overnight shell scripts with `walker-sweep` (a YAML grid run through Python), with no hard-coded paths, no `|| true` and no deleting cleanup steps. Every run writes to a unique directory.
 
 ### Phase 7: Performance
 - MuJoCo-native PD and `nstep`, checked against the golden trajectory test.
@@ -303,6 +383,21 @@ Each phase ends green: tests pass, and it gets its own commit(s) on `claude/slee
 - GitHub Actions: lint (ruff), the fast test suite, and a slow suite on a nightly or manual trigger.
 - Rewrite the README (purpose, install, a 5-command quickstart, results table), `docs/ARCHITECTURE.md` (this design), `docs/DATA.md` (NPZ schema v2) and `docs/EXPERIMENTS.md`. Delete the fictional API.md.
 - Add a CHANGELOG starting at v3.0.0, since this is a breaking release.
+
+### Phase 9: Cluster readiness (UT Dallas Juno)
+Details of the cluster (scheduler, modules, storage, CPU/GPU, container policy) are pending; `docs/ENVIRONMENT.md` collects them. Planned regardless of those details:
+- Headless operation everywhere: no GUI imports on the training path, `MUJOCO_GL` unset (or `egl` only when rendering videos).
+- `PASSIVE_WALKER_HOME` pointed at cluster scratch, so experiment outputs never land in the code checkout.
+- One job = one run directory, with:
+  - config;
+  - seed;
+  - git SHA and dirty flag;
+  - `pip freeze`;
+  - model-XML hash;
+  - host info.
+- Job templates for single runs and multi-seed array jobs, plus a small aggregation command that turns a sweep directory into the result card.
+- Thread pinning (`OMP_NUM_THREADS`, `torch.set_num_threads`) matched to allocated cores; vectorized PPO sized to the allocation.
+- Resumable checkpoints so preempted or time-limited jobs can continue.
 
 ---
 
@@ -330,8 +425,12 @@ Each phase ends green: tests pass, and it gets its own commit(s) on `claude/slee
 - A MuJoCo **MJX + JAX** backend for thousands of parallel envs (it uses the JAX side you're keeping), with the BC/PPO JAX paths sharing models.
 - Hydra configs and multirun.
 
-**E. Sim-to-real (only if hardware becomes a goal)**
-- System identification of the physical VLL walker, a domain-randomization calibration, and policy distillation to a small MLP.
+**E. Hardware transfer (eventual goal; blocked on a hardware specification)**
+- Define the actual robot: geometry, sensors, actuators and their units, achievable control rate.
+- System identification of the physical VLL walker, then calibration of the simulated model and actuator/sensor transfer functions.
+- Model latency, saturation, sensor noise and electrical energy. Mechanical work in simulation is not battery consumption.
+- Real-time inference (p95 and worst-case latency), a watchdog, a safety supervisor with the FSM as fallback, and staged hardware validation.
+- Policy distillation to a small MLP for deployment.
 
 ---
 
@@ -347,8 +446,10 @@ Reused as-is or with light edits: the `FSMStateMachine` transition logic (`core/
 - The smoke pipeline runs from a clean clone outside the repo root: `walker-collect` → `walker-train-bc --backend torch|jax` → `walker-play --no-gui` → `walker-train-ppo` (tiny) → `walker-eval`.
 - PPO sanity: it learns Pendulum-v1 or a short walker task within budget, and its values are bootstrapped (unit test on GAE with truncation).
 - Benchmarks: `scripts/bench_env.py` before and after, reported in `docs/baseline.md`.
-- The history rewrite is verified by `git count-objects -vH` and a fresh clone size. It happens only after your explicit OK for the force-push.
+- History rewrite: done and verified (fresh clone about 7 MB). The pre-rewrite history is archived as a verified git bundle outside the repo.
 
-## Remaining assumptions to confirm during execution
-- The asymmetric model (left leg fixed to the torso, a single right-hip hinge) is intentional compass-gait-style VLL design. I'll keep it.
-- The speed target and the final reward weights are chosen after the Phase 2 FSM reward-scoring report.
+## Open decisions
+- The speed target(s) and the final reward weights are chosen after the Phase 2 FSM reward-scoring report.
+- The walking-metric parameters (task speed, tracking tolerance, scenario matrix, condition and component weights, qualification thresholds) are frozen as metric v1 after the FSM reference measurement. See `docs/WALKING_METRIC.md`.
+- Juno details: scheduler, modules or containers, storage paths, CPU/GPU allocation.
+- The target hardware platform, if and when hardware work starts.
