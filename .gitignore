@@ -15,6 +15,7 @@ results/**
 *.pt
 *.eqx
 *.npz
+!tests/data/*.npz
 
 # Training outputs
 checkpoints/

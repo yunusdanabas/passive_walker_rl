@@ -1,9 +1,8 @@
-import os
 import numpy as np
 import pytest
 
-# Keep headless predictable. We don't render in tests.
-os.environ.setdefault("MUJOCO_GL", "egl")
+# Tests never render. Leave MUJOCO_GL unset: forcing "egl" makes `import mujoco`
+# fail on machines without EGL, while the default (glfw) is only loaded lazily.
 
 @pytest.fixture(autouse=True)
 def _np_print_options():
