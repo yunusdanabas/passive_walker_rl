@@ -31,7 +31,7 @@ from passive_walker.bc.utils import (
 # For other imports, users should import from submodules directly:
 # from passive_walker.bc.training import train_torch, train_jax
 # from passive_walker.bc.data import SequenceDataset, discover_npzs
-# from passive_walker.bc.evaluation import ComprehensiveEvaluator
+# from passive_walker.bc.evaluation import play_torch, play_jax
 # etc.
 
 __all__ = [

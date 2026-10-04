@@ -1,18 +1,13 @@
-"""BC evaluation module."""
+"""BC evaluation module.
 
-from passive_walker.bc.evaluation.evaluate import (
-    evaluate_model,
-    evaluate_model_comprehensive,
-    ComprehensiveEvaluator,
-    EvaluationResults
-)
-from passive_walker.bc.evaluation.play import play_policy
+``play`` runs closed-loop playback of trained BC checkpoints. ``evaluate``
+(the comprehensive evaluator) is imported explicitly by its users rather than
+here, so that playback does not depend on it.
+"""
+
+from passive_walker.bc.evaluation.play import play_jax, play_torch
 
 __all__ = [
-    "evaluate_model",
-    "evaluate_model_comprehensive",
-    "ComprehensiveEvaluator",
-    "EvaluationResults",
-    "play_policy",
+    "play_torch",
+    "play_jax",
 ]
-
