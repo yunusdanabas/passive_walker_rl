@@ -3,7 +3,7 @@
 | Machine | Role |
 |---|---|
 | Ubuntu 24.04 PC | Development, tests, GUI playback, short runs |
-| UT Dallas **Juno** servers | Training and evaluation sweeps (details pending) |
+| UT Dallas **Juno** cluster | Training and evaluation sweeps (CPU partitions for now) |
 | Windows laptop | Editing and planning only; no Python environment |
 
 ## Ubuntu 24.04 (development)
@@ -33,14 +33,36 @@ Training and evaluation never need a display.
 - Leave `MUJOCO_GL` unset unless you render; nothing on the training path imports the viewer.
 - When offscreen rendering is needed for videos on a server, use `MUJOCO_GL=egl` if the node has EGL, or `MUJOCO_GL=osmesa` otherwise.
 
-## UT Dallas Juno (pending)
+## UT Dallas Juno (training)
 
-To be filled in when the cluster details are available. Needed:
-- Scheduler (e.g. Slurm), partitions, and time and core limits.
-- Module system or container policy (Apptainer/Singularity?), plus the Python/conda availability.
-- Storage: home quota, scratch path, and purge policy.
-- CPU model and cores per node, and GPU availability.
-- Outbound network access from compute nodes (needed for `pip install`).
+Juno is a Slurm cluster. Confirm the numbers live with `sinfo`; they change as hardware arrives. Official guide: https://utdallas-hpc-juno-ug.readthedocs-hosted.com/en/latest/
+
+**Partitions**
+
+| Partition | Limit | Hardware | Use for this project |
+|---|---|---|---|
+| `normal` (default) | 2 days, ≤ 8 nodes/job | 64 CPU cores, 384 GB per node | **All current training and evaluation** (CPU MuJoCo, PPO with vectorized envs, BC, sweeps) |
+| `dev` | 2 h, ≤ 4 nodes | same nodes | Short tests and benchmarks |
+| `h200` | 2 days | 2× H200 NVL 141 GB per node | Future MJX/JAX GPU work only |
+| `h100`, `a30` | 2 days | H100 (pin the GPU type), A30 24 GB | Future GPU work only |
+
+**Limits and etiquette**
+- At most 4 running and 100 submitted jobs per user.
+- Always set `--mem` (the default is 64 GB). Fairshare is charged for what is **allocated**, not what is used, so request only what a job needs.
+- Login nodes are for editing, `git`, `pip install` and submitting; all computation goes through `sbatch`/`srun`.
+- CPU-only jobs don't go on GPU partitions, and long GPU jobs must actually use the GPU.
+
+**Storage and software**
+- Code and the conda env go in `~/work` (backed up).
+- Run outputs go in `~/scratch` (fast, never backed up, purged after 45 days idle) via `PASSIVE_WALKER_HOME`. Copy final results back to `~/work`.
+- `module load miniconda`, then a prefix env with Python 3.12; install with `pip install --no-cache-dir` (home quotas are small).
+- Headless rendering: `MUJOCO_GL=egl`.
+
+**Future GPU work (MJX/JAX)**
+- `nvidia-smi` utilization is not real load; measure DCGM SM active and power.
+- A single small MJX run uses a fraction of an H200, so pack several processes per GPU under MPS, with a per-process `XLA_PYTHON_CLIENT_MEM_FRACTION`.
+- Whole-node two-GPU jobs can wait hours; a two-task, one-GPU-per-task shape on 1–2 nodes usually starts sooner. Compare with `sbatch --test-only`.
+- Load no `cuda` module for `jax[cuda12]`. GPU results are not bit-reproducible, so compare them with a tolerance.
 
 Planned usage is described in Phase 9 of `docs/REVIEW_AND_PLAN.md`:
 - `PASSIVE_WALKER_HOME` on scratch;
@@ -48,6 +70,8 @@ Planned usage is described in Phase 9 of `docs/REVIEW_AND_PLAN.md`:
 - array jobs for seeds;
 - thread pinning;
 - resumable checkpoints.
+
+Job submission always needs the owner's approval.
 
 ## Windows (editing only)
 

@@ -30,6 +30,9 @@ events.out.tfevents.*
 # Small, reviewed test fixtures are the exception
 !tests/data/*.npz
 
+# Local handoff notes (cluster account details; the repository is public)
+agent.md
+
 # Environments and secrets
 .env
 .env.*

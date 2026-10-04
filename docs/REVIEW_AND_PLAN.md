@@ -385,7 +385,8 @@ Each phase ends green: tests pass, and it gets its own commit(s) on the `stabili
 - Add a CHANGELOG starting at v3.0.0, since this is a breaking release.
 
 ### Phase 9: Cluster readiness (UT Dallas Juno)
-Details of the cluster (scheduler, modules, storage, CPU/GPU, container policy) are pending; `docs/ENVIRONMENT.md` collects them. Planned regardless of those details:
+Juno is a Slurm cluster; see `docs/ENVIRONMENT.md`. Current training is CPU work, so it runs on the `normal`/`dev` CPU partitions (64 cores, 384 GB per node). GPU partitions are used only once the MJX/JAX phase starts. Planned:
+- Slurm templates for `dev` (smoke) and `normal` (training and sweeps), with explicit `-c`, `--mem` and `-t`, and an environment check at job start. Every submission needs the owner's approval.
 - Headless operation everywhere: no GUI imports on the training path, `MUJOCO_GL` unset (or `egl` only when rendering videos).
 - `PASSIVE_WALKER_HOME` pointed at cluster scratch, so experiment outputs never land in the code checkout.
 - One job = one run directory, with:
@@ -451,5 +452,5 @@ Reused as-is or with light edits: the `FSMStateMachine` transition logic (`core/
 ## Open decisions
 - The speed target(s) and the final reward weights are chosen after the Phase 2 FSM reward-scoring report.
 - The walking-metric parameters (task speed, tracking tolerance, scenario matrix, condition and component weights, qualification thresholds) are frozen as metric v1 after the FSM reference measurement. See `docs/WALKING_METRIC.md`.
-- Juno details: scheduler, modules or containers, storage paths, CPU/GPU allocation.
+- Juno layout for this project (code and env under `~/work`, runs on `~/scratch`) is proposed in `docs/ENVIRONMENT.md` and still needs the owner's confirmation.
 - The target hardware platform, if and when hardware work starts.
